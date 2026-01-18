@@ -1,0 +1,23 @@
+# Prometheus configuration for ModelGate
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+alerting:
+  alertmanagers: []
+
+rule_files: []
+
+scrape_configs:
+  # Scrape ModelGate metrics
+  - job_name: 'modelgate'
+    static_configs:
+      - targets: ['modelgate:9090']
+    metrics_path: /metrics
+
+  # Scrape Prometheus itself
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+

@@ -1,0 +1,2154 @@
+# ModelGate GraphQL Schema
+# ========================
+
+# Scalars
+scalar DateTime
+scalar JSON
+
+# =============================================================================
+# ENUMS
+# =============================================================================
+
+enum TenantStatus {
+  ACTIVE
+  SUSPENDED
+  PENDING
+}
+
+enum TenantTier {
+  FREE
+  STARTER
+  PROFESSIONAL
+  ENTERPRISE
+}
+
+# =============================================================================
+# PLAN LIMITS (Tenant Resource Ceilings)
+# =============================================================================
+
+# PlanLimits defines resource ceilings for a tenant based on their tier
+type PlanLimits {
+  maxConnectionsPerProvider: Int!
+  maxIdleConnections: Int!
+  maxConcurrentRequests: Int!
+  maxQueuedRequests: Int!
+  maxRoles: Int!           # -1 means unlimited
+  maxAPIKeys: Int!         # -1 means unlimited
+  maxProviders: Int!       # -1 means unlimited
+}
+
+input PlanLimitsInput {
+  maxConnectionsPerProvider: Int
+  maxIdleConnections: Int
+  maxConcurrentRequests: Int
+  maxQueuedRequests: Int
+  maxRoles: Int
+  maxAPIKeys: Int
+  maxProviders: Int
+}
+
+# =============================================================================
+# CONNECTION SETTINGS (Per-Provider)
+# =============================================================================
+
+# ConnectionSettings defines HTTP connection pool settings for a provider
+type ConnectionSettings {
+  maxConnections: Int!
+  maxIdleConnections: Int!
+  idleTimeoutSec: Int!
+  requestTimeoutSec: Int!
+  enableHTTP2: Boolean!
+  enableKeepAlive: Boolean!
+}
+
+input ConnectionSettingsInput {
+  maxConnections: Int
+  maxIdleConnections: Int
+  idleTimeoutSec: Int
+  requestTimeoutSec: Int
+  enableHTTP2: Boolean
+  enableKeepAlive: Boolean
+}
+
+enum Provider {
+  OPENAI
+  ANTHROPIC
+  GEMINI
+  BEDROCK
+  AZURE_OPENAI
+  OLLAMA
+  GROQ
+  MISTRAL
+  TOGETHER
+  COHERE
+}
+
+enum AlertType {
+  COST
+  TOKENS
+  REQUESTS
+}
+
+enum AlertPeriod {
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
+# Policy-related enums
+enum TemplateFormat {
+  XML
+  JSON
+  MARKDOWN
+}
+
+enum UnicodeNormForm {
+  NFC
+  NFKC
+  NFD
+  NFKD
+}
+
+enum DetectionMethod {
+  RULES
+  ML
+  HYBRID
+}
+
+enum DetectionSensitivity {
+  LOW
+  MEDIUM
+  HIGH
+  PARANOID
+}
+
+enum DetectionAction {
+  BLOCK
+  WARN
+  LOG
+  QUARANTINE
+  TRANSFORM
+}
+
+enum PIIAction {
+  BLOCK    # Block the request entirely
+  REDACT   # Replace PII with placeholders like [EMAIL REDACTED]
+  REWRITE  # Transform PII using deterministic character rotation
+  WARN     # Allow but log a warning
+  LOG      # Allow and log for audit
+}
+
+enum OutputViolationAction {
+  BLOCK
+  REDACT
+  WARN
+  LOG
+  REGENERATE
+}
+
+enum RoutingStrategy {
+  COST
+  LATENCY
+  WEIGHTED
+  ROUND_ROBIN
+  CAPABILITY
+}
+
+enum BudgetExceededAction {
+  BLOCK
+  WARN
+  THROTTLE
+}
+
+# Audit log enums
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  REVOKE
+  LOGIN
+  LOGOUT
+}
+
+enum AuditResourceType {
+  ROLE
+  POLICY
+  GROUP
+  API_KEY
+  USER
+  PROVIDER
+  TENANT
+  SESSION
+}
+
+# =============================================================================
+# TYPES - Authentication
+# =============================================================================
+
+type AuthPayload {
+  token: String!
+  user: User!
+  expiresAt: DateTime!
+}
+
+type User {
+  id: ID!
+  email: String!
+  name: String!
+  role: String!
+  status: String!
+  createdAt: DateTime!
+  createdBy: String
+  createdByEmail: String
+  lastLoginAt: DateTime
+}
+
+# =============================================================================
+# TYPES - Tenant
+# =============================================================================
+
+type Tenant {
+  id: ID!
+  name: String!
+  slug: String!
+  email: String!
+  status: TenantStatus!
+  tier: TenantTier!
+  settings: TenantSettings
+  quotas: TenantQuotas
+  planLimits: PlanLimits!           # Effective limits (tier defaults + overrides)
+  planLimitsOverride: PlanLimits    # Custom overrides (enterprise only)
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+type TenantSettings {
+  defaultModel: String
+  maxConcurrentRequests: Int
+  webhookUrl: String
+}
+
+type TenantQuotas {
+  maxRequestsPerMinute: Int!
+  maxRequestsPerDay: Int!
+  maxTokensPerDay: Int!
+  maxCostPerMonthUSD: Float!
+}
+
+type TenantStats {
+  totalRequests: Int!
+  totalTokens: Int!
+  totalCostUSD: Float!
+  activeApiKeys: Int!
+  activeUsers: Int!
+}
+
+type RegistrationRequest {
+  id: ID!
+  organizationName: String!
+  organizationEmail: String!
+  adminName: String!
+  adminEmail: String!
+  slug: String!
+  status: String!
+  rejectionReason: String
+  requestedAt: DateTime!
+  reviewedAt: DateTime
+  reviewedBy: String
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+# =============================================================================
+# TYPES - Providers & Models
+# =============================================================================
+
+type ProviderConfig {
+  provider: Provider!
+  enabled: Boolean!
+  hasApiKey: Boolean!
+  hasAccessKeys: Boolean!  # For AWS IAM credentials (enables true streaming)
+  streamingMode: String    # "true_streaming" (IAM) or "simulated_streaming" (Bearer token)
+  baseUrl: String
+  region: String
+  regionPrefix: String
+  resourceName: String
+  apiVersion: String
+  modelsUrl: String
+  connectionSettings: ConnectionSettings!
+  planCeiling: ConnectionSettings!  # Max values allowed by tenant plan
+  apiKeys: [ProviderAPIKey!]!       # Multi-key support
+}
+
+type Model {
+  id: ID!
+  name: String!
+  provider: Provider!
+  enabled: Boolean!
+  supportsTools: Boolean!
+  supportsStreaming: Boolean!
+  contextLimit: Int!
+  inputCostPer1M: Float!
+  outputCostPer1M: Float!
+}
+
+type RefreshModelsResult {
+  success: Boolean!
+  count: Int!
+  message: String!
+  provider: Provider!
+}
+
+# =============================================================================
+# TYPES - Provider API Keys (Multi-Key Support)
+# =============================================================================
+
+type ProviderAPIKey {
+  id: ID!
+  provider: Provider!
+  name: String
+  keyPrefix: String!              # First 12 chars of API key OR Access Key ID
+  credentialType: String!         # 'api_key', 'iam_credentials', or 'both'
+  priority: Int!
+  enabled: Boolean!
+  healthScore: Float!
+  successCount: Int!
+  failureCount: Int!
+  rateLimitRemaining: Int
+  rateLimitResetAt: DateTime
+  requestCount: Int!
+  lastUsedAt: DateTime
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+# =============================================================================
+# TYPES - RBAC
+# =============================================================================
+
+type Role {
+  id: ID!
+  name: String!
+  description: String
+  isDefault: Boolean!
+  isSystem: Boolean!
+  policy: RolePolicy
+  createdBy: String
+  createdByEmail: String
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+# MCP Gateway Policies
+type MCPPolicies {
+  enabled: Boolean!
+  allowToolSearch: Boolean!
+  auditToolExecution: Boolean!
+}
+
+# Extended RolePolicy with 9 policy types
+type RolePolicy {
+  id: ID!
+  roleId: ID!
+  
+  # Core Policies (4)
+  promptPolicies: PromptPolicies!
+  toolPolicies: ToolPolicies!
+  rateLimitPolicy: RateLimitPolicy!
+  modelRestrictions: ModelRestrictions!
+  
+  # Extended Policies (4)
+  cachingPolicy: CachingPolicy!
+  routingPolicy: RoutingPolicy!
+  resiliencePolicy: ResiliencePolicy!
+  budgetPolicy: BudgetPolicy!
+  
+  # MCP Gateway Policy
+  mcpPolicies: MCPPolicies!
+  
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+type Group {
+  id: ID!
+  name: String!
+  description: String
+  roles: [Role!]!
+  createdBy: String
+  createdByEmail: String
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+# =============================================================================
+# POLICY TYPES - Comprehensive Security Framework
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 1. PROMPT POLICIES (OWASP-aligned security)
+# -----------------------------------------------------------------------------
+
+type PromptPolicies {
+  # Structural Separation
+  structuralSeparation: StructuralSeparationConfig!
+  
+  # Input Normalization
+  normalization: NormalizationConfig!
+  
+  # Input Bounds
+  inputBounds: InputBoundsConfig!
+  
+  # Injection Detection
+  directInjectionDetection: InjectionDetectionConfig!
+  indirectInjectionDetection: InjectionDetectionConfig!
+  
+  # PII Policy
+  piiPolicy: PIIPolicyConfig!
+  
+  # Content Filtering
+  contentFiltering: ContentFilteringConfig!
+  
+  # System Prompt Protection
+  systemPromptProtection: SystemPromptProtectionConfig!
+  
+  # Output Validation
+  outputValidation: OutputValidationConfig!
+}
+
+type StructuralSeparationConfig {
+  enabled: Boolean!
+  templateFormat: TemplateFormat!
+  systemSection: String!
+  userSection: String!
+  retrievedSection: String!
+  forbidInstructionsInData: Boolean!
+  quoteUserContent: Boolean!
+  markRetrievedAsUntrusted: Boolean!
+}
+
+type NormalizationConfig {
+  enabled: Boolean!
+  unicodeNormalization: UnicodeNormForm!
+  normalizeNewlines: Boolean!
+  stripNullBytes: Boolean!
+  removeInvisibleChars: Boolean!
+  detectMixedEncodings: Boolean!
+  decodeBase64: Boolean!
+  decodeURLEncoding: Boolean!
+  rejectSuspiciousEncoding: Boolean!
+  collapseWhitespace: Boolean!
+  trimWhitespace: Boolean!
+}
+
+type InputBoundsConfig {
+  enabled: Boolean!
+  maxPromptLength: Int!
+  maxPromptTokens: Int!
+  maxMessageCount: Int!
+  maxMessageLength: Int!
+  maxJSONNestingDepth: Int!
+  maxURLCount: Int!
+  maxAttachmentCount: Int!
+  maxAttachmentSize: Int!
+  maxRepeatedPhrases: Int!
+  anomalyThreshold: Float!
+}
+
+type InjectionDetectionConfig {
+  enabled: Boolean!
+  detectionMethod: DetectionMethod!
+  sensitivity: DetectionSensitivity!
+  onDetection: DetectionAction!
+  blockThreshold: Float!
+  patternDetection: PatternDetectionConfig!
+  mlDetection: MLDetectionConfig!
+}
+
+type PatternDetectionConfig {
+  enabled: Boolean!
+  detectIgnoreInstructions: Boolean!
+  detectSystemPromptRequests: Boolean!
+  detectRoleConfusion: Boolean!
+  detectJailbreakPhrases: Boolean!
+  detectToolCoercion: Boolean!
+  detectEncodingEvasion: Boolean!
+  customBlockPatterns: [String!]!
+  customWarnPatterns: [String!]!
+  # Fuzzy matching configuration
+  enableFuzzyMatching: Boolean!
+  enableWordMatching: Boolean!
+  enableNormalization: Boolean!
+  fuzzyThreshold: Float!
+  sensitivity: DetectionSensitivity!
+  whitelistedPhrases: [String!]!
+}
+
+type MLDetectionConfig {
+  enabled: Boolean!
+  model: String!
+  customEndpoint: String!
+  injectionThreshold: Float!
+  jailbreakThreshold: Float!
+}
+
+type PIIPolicyConfig {
+  enabled: Boolean!
+  scanInputs: Boolean!
+  scanOutputs: Boolean!
+  scanRetrieved: Boolean!
+  categories: [String!]!
+  onDetection: PIIAction!
+  redaction: PIIRedactionConfig!
+}
+
+type PIIRedactionConfig {
+  placeholderFormat: String!
+  storeOriginals: Boolean!
+  restoreInResponse: Boolean!
+  consistentPlaceholders: Boolean!
+}
+
+type ContentFilteringConfig {
+  enabled: Boolean!
+  blockedCategories: [String!]!
+  customBlockedPatterns: [String!]!
+  customAllowedPatterns: [String!]!
+  onDetection: DetectionAction!
+}
+
+type SystemPromptProtectionConfig {
+  enabled: Boolean!
+  detectExtractionAttempts: Boolean!
+  addAntiExtractionSuffix: Boolean!
+  antiExtractionSuffix: String!
+  canaryEnabled: Boolean!
+  canaryToken: String!
+  canaryAlertOnLeak: Boolean!
+  canaryWebhook: String!
+}
+
+type OutputValidationConfig {
+  enabled: Boolean!
+  enforceSchema: Boolean!
+  outputSchema: String!
+  rejectInvalidSchema: Boolean!
+  detectCodeExecution: Boolean!
+  detectSQLStatements: Boolean!
+  detectShellCommands: Boolean!
+  detectHTMLScripts: Boolean!
+  escapeForHTML: Boolean!
+  escapeForSQL: Boolean!
+  escapeForCLI: Boolean!
+  detectSecretLeakage: Boolean!
+  secretPatterns: [String!]!
+  detectPIILeakage: Boolean!
+  detectSystemPromptLeakage: Boolean!
+  applyContentFiltering: Boolean!
+  onViolation: OutputViolationAction!
+}
+
+# -----------------------------------------------------------------------------
+# 2. TOOL POLICIES
+# -----------------------------------------------------------------------------
+
+type ToolPolicies {
+  allowToolCalling: Boolean!
+  allowedTools: [String!]!
+  blockedTools: [String!]!
+  toolConfigs: [ToolConfig!]!
+  maxToolCallsPerRequest: Int!
+  requireToolApproval: Boolean!
+}
+
+type ToolConfig {
+  toolName: String!
+  enabled: Boolean!
+  allowedParameters: [String!]!
+  blockedParameters: [String!]!
+  maxCallsPerRequest: Int!
+  requireApproval: Boolean!
+}
+
+# -----------------------------------------------------------------------------
+# 3. RATE LIMIT POLICIES
+# -----------------------------------------------------------------------------
+
+type RateLimitPolicy {
+  requestsPerMinute: Int!
+  requestsPerHour: Int!
+  requestsPerDay: Int!
+  tokensPerMinute: Int!
+  tokensPerHour: Int!
+  tokensPerDay: Int!
+  costPerMinuteUSD: Float!
+  costPerHourUSD: Float!
+  costPerDayUSD: Float!
+  costPerMonthUSD: Float!
+  burstLimit: Int!
+  burstTokens: Int!
+  perModelLimits: [ModelRateLimit!]!
+}
+
+type ModelRateLimit {
+  modelId: String!
+  requestsPerMinute: Int!
+  tokensPerMinute: Int!
+  costPerDayUSD: Float!
+}
+
+# -----------------------------------------------------------------------------
+# 4. MODEL RESTRICTIONS
+# -----------------------------------------------------------------------------
+
+type ModelRestrictions {
+  allowedModels: [String!]!
+  allowedProviders: [Provider!]!
+  defaultModel: String!
+  maxTokensPerRequest: Int!
+}
+
+# -----------------------------------------------------------------------------
+# 5. CACHING POLICY (NEW)
+# -----------------------------------------------------------------------------
+
+type CachingPolicy {
+  enabled: Boolean!
+  similarityThreshold: Float!
+  ttlSeconds: Int!
+  maxCacheSize: Int!
+  cacheStreaming: Boolean!
+  cacheToolCalls: Boolean!
+  excludedModels: [String!]!
+  excludedPatterns: [String!]!
+  trackSavings: Boolean!
+}
+
+# -----------------------------------------------------------------------------
+# 6. ROUTING POLICY (NEW)
+# -----------------------------------------------------------------------------
+
+type RoutingPolicy {
+  enabled: Boolean!
+  strategy: RoutingStrategy!
+  costConfig: CostRoutingConfig
+  latencyConfig: LatencyRoutingConfig
+  weightedConfig: WeightedRoutingConfig
+  capabilityConfig: CapabilityRoutingConfig
+  allowModelOverride: Boolean!
+}
+
+type CostRoutingConfig {
+  simpleQueryThreshold: Float!
+  complexQueryThreshold: Float!
+  simpleModels: [String!]!
+  mediumModels: [String!]!
+  complexModels: [String!]!
+}
+
+type LatencyRoutingConfig {
+  maxLatencyMs: Int!
+  preferredModels: [String!]!
+}
+
+type WeightedRoutingConfig {
+  weights: [ProviderWeight!]!
+}
+
+type ProviderWeight {
+  provider: String!
+  weight: Int!
+}
+
+type CapabilityRoutingConfig {
+  taskModels: [TaskModelMapping!]!
+}
+
+type TaskModelMapping {
+  taskType: String!
+  models: [String!]!
+}
+
+# -----------------------------------------------------------------------------
+# 7. RESILIENCE POLICY (NEW)
+# -----------------------------------------------------------------------------
+
+type ResiliencePolicy {
+  enabled: Boolean!
+  
+  # Retry config
+  retryEnabled: Boolean!
+  maxRetries: Int!
+  retryBackoffMs: Int!
+  retryBackoffMax: Int!
+  retryJitter: Boolean!
+  
+  # Retryable errors
+  retryOnTimeout: Boolean!
+  retryOnRateLimit: Boolean!
+  retryOnServerError: Boolean!
+  retryableErrors: [String!]!
+  
+  # Fallback chain
+  fallbackEnabled: Boolean!
+  fallbackChain: [FallbackConfig!]!
+  
+  # Circuit breaker
+  circuitBreakerEnabled: Boolean!
+  circuitBreakerThreshold: Int!
+  circuitBreakerTimeout: Int!
+  
+  # Timeout
+  requestTimeoutMs: Int!
+}
+
+type FallbackConfig {
+  provider: String!
+  model: String!
+  priority: Int!
+  timeoutMs: Int!
+}
+
+# -----------------------------------------------------------------------------
+# 8. BUDGET POLICY (NEW)
+# -----------------------------------------------------------------------------
+
+type BudgetPolicy {
+  enabled: Boolean!
+  
+  # Limits
+  dailyLimitUSD: Float!
+  weeklyLimitUSD: Float!
+  monthlyLimitUSD: Float!
+  maxCostPerRequest: Float!
+  
+  # Alerts
+  alertThreshold: Float!
+  criticalThreshold: Float!
+  alertWebhook: String!
+  alertEmails: [String!]!
+  alertSlack: String!
+  
+  # Behavior
+  onExceeded: BudgetExceededAction!
+  softLimitEnabled: Boolean!
+  softLimitBuffer: Float!
+}
+
+# =============================================================================
+# TYPES - API Keys
+# =============================================================================
+
+type APIKey {
+  id: ID!
+  name: String!
+  keyPrefix: String!
+  role: Role
+  group: Group
+  lastUsedAt: DateTime
+  createdAt: DateTime!
+  createdBy: String
+  createdByEmail: String
+  expiresAt: DateTime
+  isExpired: Boolean!
+  revoked: Boolean!
+}
+
+type APIKeyWithSecret {
+  apiKey: APIKey!
+  secret: String!
+}
+
+# =============================================================================
+# TYPES - Audit Logs
+# =============================================================================
+
+type AuditLog {
+  id: ID!
+  timestamp: DateTime!
+  action: AuditAction!
+  resourceType: AuditResourceType!
+  resourceId: String!
+  resourceName: String
+  actorId: String!
+  actorEmail: String
+  actorType: String!
+  ipAddress: String
+  userAgent: String
+  details: JSON
+  oldValue: JSON
+  newValue: JSON
+  status: String!
+  errorMessage: String
+}
+
+type AuditLogConnection {
+  items: [AuditLog!]!
+  totalCount: Int!
+  hasMore: Boolean!
+}
+
+input AuditLogFilter {
+  resourceType: AuditResourceType
+  resourceId: String
+  action: AuditAction
+  actorId: String
+  startTime: DateTime
+  endTime: DateTime
+}
+
+# =============================================================================
+# TYPES - Analytics & Logging
+# =============================================================================
+
+type DashboardStats {
+  totalRequests: Int!
+  totalTokens: Int!
+  totalCostUSD: Float!
+  avgLatencyMs: Float!
+  errorRate: Float!
+  requestsByHour: [HourlyStats!]!
+  costTrend: [DailyCost!]!
+  topModels: [ModelUsage!]!
+  providerBreakdown: [ProviderUsage!]!
+  apiKeyBreakdown: [APIKeyUsage!]!
+}
+
+type HourlyStats {
+  hour: String!
+  requests: Int!
+  tokens: Int!
+}
+
+type DailyCost {
+  date: String!
+  cost: Float!
+}
+
+type ModelUsage {
+  model: String!
+  requests: Int!
+  tokens: Int!
+  cost: Float!
+}
+
+type ProviderUsage {
+  provider: Provider!
+  requests: Int!
+  percentage: Float!
+}
+
+type APIKeyUsage {
+  apiKeyId: ID!
+  apiKeyName: String!
+  requests: Int!
+  tokens: Int!
+  cost: Float!
+  percentage: Float!
+}
+
+type RequestLog {
+  id: ID!
+  model: String!
+  provider: Provider!
+  status: String!
+  inputTokens: Int!
+  outputTokens: Int!
+  latencyMs: Int!
+  costUSD: Float!
+  apiKeyName: String
+  errorCode: String
+  errorMessage: String
+  createdAt: DateTime!
+}
+
+type RequestLogDetail {
+  id: ID!
+  model: String!
+  provider: Provider!
+  status: String!
+  inputTokens: Int!
+  outputTokens: Int!
+  latencyMs: Int!
+  costUSD: Float!
+  apiKeyName: String
+  errorCode: String
+  errorMessage: String
+  prompt: String
+  response: String
+  metadata: JSON
+  createdAt: DateTime!
+}
+
+type RequestLogConnection {
+  edges: [RequestLog!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
+}
+
+type PageInfo {
+  hasNextPage: Boolean!
+  hasPreviousPage: Boolean!
+  startCursor: String
+  endCursor: String
+}
+
+type CostAnalysis {
+  totalCost: Float!
+  periodStart: DateTime!
+  periodEnd: DateTime!
+  dailyCosts: [DailyCost!]!
+  costByProvider: [ProviderCost!]!
+  costByModel: [ModelCost!]!
+  projectedMonthlyCost: Float!
+  budgetUtilization: Float!
+}
+
+type ProviderCost {
+  provider: Provider!
+  cost: Float!
+  percentage: Float!
+}
+
+type ModelCost {
+  model: String!
+  cost: Float!
+  requests: Int!
+}
+
+type PerformanceMetrics {
+  avgLatencyMs: Float!
+  p50LatencyMs: Float!
+  p95LatencyMs: Float!
+  p99LatencyMs: Float!
+  successRate: Float!
+  errorRate: Float!
+  modelPerformance: [ModelPerformance!]!
+}
+
+type ModelPerformance {
+  model: String!
+  avgLatencyMs: Float!
+  successRate: Float!
+  requestCount: Int!
+}
+
+type BudgetAlert {
+  id: ID!
+  name: String!
+  type: AlertType!
+  threshold: Float!
+  thresholdType: String!
+  period: AlertPeriod!
+  enabled: Boolean!
+  lastTriggeredAt: DateTime
+  createdAt: DateTime!
+}
+
+# =============================================================================
+# INPUTS
+# =============================================================================
+
+input LoginInput {
+  email: String!
+  password: String!
+}
+
+input CreateTenantInput {
+  name: String!
+  slug: String
+  email: String!
+  tier: TenantTier
+  adminName: String
+  adminEmail: String
+  adminPassword: String
+  planLimitsOverride: PlanLimitsInput  # Custom limits (enterprise only)
+}
+
+input UpdateTenantInput {
+  name: String
+  email: String
+  status: TenantStatus
+  tier: TenantTier
+  planLimitsOverride: PlanLimitsInput  # Custom limits (enterprise only)
+}
+
+input CreateRegistrationRequestInput {
+  organizationName: String!
+  organizationEmail: String!
+  adminName: String!
+  adminEmail: String!
+  adminPassword: String!
+  preferredTier: TenantTier  # User's requested tier (admin can override when approving)
+}
+
+input ApproveRegistrationInput {
+  requestId: ID!
+  tier: TenantTier
+}
+
+input RejectRegistrationInput {
+  requestId: ID!
+  reason: String!
+}
+
+input UpdateProviderInput {
+  provider: Provider!
+  enabled: Boolean!
+  apiKey: String
+  baseUrl: String
+  region: String
+  regionPrefix: String
+  accessKeyId: String
+  secretAccessKey: String
+  resourceName: String
+  apiVersion: String
+  modelsUrl: String
+  connectionSettings: ConnectionSettingsInput
+}
+
+# Multi-Key Management Inputs
+input AddProviderAPIKeyInput {
+  provider: Provider!
+  # Provide EITHER apiKey OR both accessKeyId + secretAccessKey
+  apiKey: String               # API Key for Bearer token authentication
+  accessKeyId: String          # AWS Access Key ID for IAM authentication (Bedrock only)
+  secretAccessKey: String      # AWS Secret Access Key for IAM authentication (Bedrock only)
+  name: String
+  priority: Int!
+}
+
+input UpdateProviderAPIKeyInput {
+  id: ID!
+  name: String
+  priority: Int
+  enabled: Boolean
+  # Can update credentials (provide all or none)
+  apiKey: String
+  accessKeyId: String
+  secretAccessKey: String
+}
+
+input CreateRoleInput {
+  name: String!
+  description: String
+  isDefault: Boolean
+  policy: RolePolicyInput
+}
+
+input UpdateRoleInput {
+  name: String
+  description: String
+  isDefault: Boolean
+}
+
+# MCP Gateway Policies Input
+input MCPPoliciesInput {
+  enabled: Boolean
+  allowToolSearch: Boolean
+  auditToolExecution: Boolean
+}
+
+# Extended RolePolicyInput with all 9 policy types
+input RolePolicyInput {
+  promptPolicies: PromptPoliciesInput
+  toolPolicies: ToolPoliciesInput
+  rateLimitPolicy: RateLimitPolicyInput
+  modelRestrictions: ModelRestrictionsInput
+  cachingPolicy: CachingPolicyInput
+  routingPolicy: RoutingPolicyInput
+  resiliencePolicy: ResiliencePolicyInput
+  budgetPolicy: BudgetPolicyInput
+  mcpPolicies: MCPPoliciesInput
+}
+
+# -----------------------------------------------------------------------------
+# PROMPT POLICIES INPUT (Comprehensive Security)
+# -----------------------------------------------------------------------------
+
+input PromptPoliciesInput {
+  structuralSeparation: StructuralSeparationInput
+  normalization: NormalizationInput
+  inputBounds: InputBoundsInput
+  directInjectionDetection: InjectionDetectionInput
+  indirectInjectionDetection: InjectionDetectionInput
+  piiPolicy: PIIPolicyInput
+  contentFiltering: ContentFilteringInput
+  systemPromptProtection: SystemPromptProtectionInput
+  outputValidation: OutputValidationInput
+}
+
+input StructuralSeparationInput {
+  enabled: Boolean
+  templateFormat: TemplateFormat
+  systemSection: String
+  userSection: String
+  retrievedSection: String
+  forbidInstructionsInData: Boolean
+  quoteUserContent: Boolean
+  markRetrievedAsUntrusted: Boolean
+}
+
+input NormalizationInput {
+  enabled: Boolean
+  unicodeNormalization: UnicodeNormForm
+  normalizeNewlines: Boolean
+  stripNullBytes: Boolean
+  removeInvisibleChars: Boolean
+  detectMixedEncodings: Boolean
+  decodeBase64: Boolean
+  decodeURLEncoding: Boolean
+  rejectSuspiciousEncoding: Boolean
+  collapseWhitespace: Boolean
+  trimWhitespace: Boolean
+}
+
+input InputBoundsInput {
+  enabled: Boolean
+  maxPromptLength: Int
+  maxPromptTokens: Int
+  maxMessageCount: Int
+  maxMessageLength: Int
+  maxJSONNestingDepth: Int
+  maxURLCount: Int
+  maxAttachmentCount: Int
+  maxAttachmentSize: Int
+  maxRepeatedPhrases: Int
+  anomalyThreshold: Float
+}
+
+input InjectionDetectionInput {
+  enabled: Boolean
+  detectionMethod: DetectionMethod
+  sensitivity: DetectionSensitivity
+  onDetection: DetectionAction
+  blockThreshold: Float
+  patternDetection: PatternDetectionInput
+  mlDetection: MLDetectionInput
+}
+
+input PatternDetectionInput {
+  enabled: Boolean
+  detectIgnoreInstructions: Boolean
+  detectSystemPromptRequests: Boolean
+  detectRoleConfusion: Boolean
+  detectJailbreakPhrases: Boolean
+  detectToolCoercion: Boolean
+  detectEncodingEvasion: Boolean
+  customBlockPatterns: [String!]
+  customWarnPatterns: [String!]
+  # Fuzzy matching configuration
+  enableFuzzyMatching: Boolean
+  enableWordMatching: Boolean
+  enableNormalization: Boolean
+  fuzzyThreshold: Float
+  sensitivity: DetectionSensitivity
+  whitelistedPhrases: [String!]
+}
+
+input MLDetectionInput {
+  enabled: Boolean
+  model: String
+  customEndpoint: String
+  customAPIKey: String
+  injectionThreshold: Float
+  jailbreakThreshold: Float
+}
+
+input PIIPolicyInput {
+  enabled: Boolean
+  scanInputs: Boolean
+  scanOutputs: Boolean
+  scanRetrieved: Boolean
+  categories: [String!]
+  onDetection: PIIAction
+  redaction: PIIRedactionInput
+}
+
+input PIIRedactionInput {
+  placeholderFormat: String
+  storeOriginals: Boolean
+  restoreInResponse: Boolean
+  consistentPlaceholders: Boolean
+}
+
+input ContentFilteringInput {
+  enabled: Boolean
+  blockedCategories: [String!]
+  customBlockedPatterns: [String!]
+  customAllowedPatterns: [String!]
+  onDetection: DetectionAction
+}
+
+input SystemPromptProtectionInput {
+  enabled: Boolean
+  detectExtractionAttempts: Boolean
+  addAntiExtractionSuffix: Boolean
+  antiExtractionSuffix: String
+  canaryEnabled: Boolean
+  canaryToken: String
+  canaryAlertOnLeak: Boolean
+  canaryWebhook: String
+}
+
+input OutputValidationInput {
+  enabled: Boolean
+  enforceSchema: Boolean
+  outputSchema: String
+  rejectInvalidSchema: Boolean
+  detectCodeExecution: Boolean
+  detectSQLStatements: Boolean
+  detectShellCommands: Boolean
+  detectHTMLScripts: Boolean
+  escapeForHTML: Boolean
+  escapeForSQL: Boolean
+  escapeForCLI: Boolean
+  detectSecretLeakage: Boolean
+  secretPatterns: [String!]
+  detectPIILeakage: Boolean
+  detectSystemPromptLeakage: Boolean
+  applyContentFiltering: Boolean
+  onViolation: OutputViolationAction
+}
+
+# -----------------------------------------------------------------------------
+# TOOL POLICIES INPUT
+# -----------------------------------------------------------------------------
+
+input ToolPoliciesInput {
+  allowToolCalling: Boolean
+  allowedTools: [String!]
+  blockedTools: [String!]
+  toolConfigs: [ToolConfigInput!]
+  maxToolCallsPerRequest: Int
+  requireToolApproval: Boolean
+}
+
+input ToolConfigInput {
+  toolName: String!
+  enabled: Boolean
+  allowedParameters: [String!]
+  blockedParameters: [String!]
+  maxCallsPerRequest: Int
+  requireApproval: Boolean
+}
+
+# -----------------------------------------------------------------------------
+# RATE LIMIT POLICY INPUT
+# -----------------------------------------------------------------------------
+
+input RateLimitPolicyInput {
+  requestsPerMinute: Int
+  requestsPerHour: Int
+  requestsPerDay: Int
+  tokensPerMinute: Int
+  tokensPerHour: Int
+  tokensPerDay: Int
+  costPerMinuteUSD: Float
+  costPerHourUSD: Float
+  costPerDayUSD: Float
+  costPerMonthUSD: Float
+  burstLimit: Int
+  burstTokens: Int
+  perModelLimits: [ModelRateLimitInput!]
+}
+
+input ModelRateLimitInput {
+  modelId: String!
+  requestsPerMinute: Int
+  tokensPerMinute: Int
+  costPerDayUSD: Float
+}
+
+# -----------------------------------------------------------------------------
+# MODEL RESTRICTIONS INPUT
+# -----------------------------------------------------------------------------
+
+input ModelRestrictionsInput {
+  allowedModels: [String!]
+  allowedProviders: [Provider!]
+  defaultModel: String
+  maxTokensPerRequest: Int
+}
+
+# -----------------------------------------------------------------------------
+# CACHING POLICY INPUT (NEW)
+# -----------------------------------------------------------------------------
+
+input CachingPolicyInput {
+  enabled: Boolean
+  similarityThreshold: Float
+  ttlSeconds: Int
+  maxCacheSize: Int
+  cacheStreaming: Boolean
+  cacheToolCalls: Boolean
+  excludedModels: [String!]
+  excludedPatterns: [String!]
+  trackSavings: Boolean
+}
+
+# -----------------------------------------------------------------------------
+# ROUTING POLICY INPUT (NEW)
+# -----------------------------------------------------------------------------
+
+input RoutingPolicyInput {
+  enabled: Boolean
+  strategy: RoutingStrategy
+  costConfig: CostRoutingConfigInput
+  latencyConfig: LatencyRoutingConfigInput
+  weightedConfig: WeightedRoutingConfigInput
+  capabilityConfig: CapabilityRoutingConfigInput
+  allowModelOverride: Boolean
+}
+
+input CostRoutingConfigInput {
+  simpleQueryThreshold: Float
+  complexQueryThreshold: Float
+  simpleModels: [String!]
+  mediumModels: [String!]
+  complexModels: [String!]
+}
+
+input LatencyRoutingConfigInput {
+  maxLatencyMs: Int
+  preferredModels: [String!]
+}
+
+input WeightedRoutingConfigInput {
+  weights: [ProviderWeightInput!]
+}
+
+input ProviderWeightInput {
+  provider: String!
+  weight: Int!
+}
+
+input CapabilityRoutingConfigInput {
+  taskModels: [TaskModelMappingInput!]
+}
+
+input TaskModelMappingInput {
+  taskType: String!
+  models: [String!]!
+}
+
+# -----------------------------------------------------------------------------
+# RESILIENCE POLICY INPUT (NEW)
+# -----------------------------------------------------------------------------
+
+input ResiliencePolicyInput {
+  enabled: Boolean
+  retryEnabled: Boolean
+  maxRetries: Int
+  retryBackoffMs: Int
+  retryBackoffMax: Int
+  retryJitter: Boolean
+  retryOnTimeout: Boolean
+  retryOnRateLimit: Boolean
+  retryOnServerError: Boolean
+  retryableErrors: [String!]
+  fallbackEnabled: Boolean
+  fallbackChain: [FallbackConfigInput!]
+  circuitBreakerEnabled: Boolean
+  circuitBreakerThreshold: Int
+  circuitBreakerTimeout: Int
+  requestTimeoutMs: Int
+}
+
+input FallbackConfigInput {
+  provider: String!
+  model: String!
+  priority: Int!
+  timeoutMs: Int
+}
+
+# -----------------------------------------------------------------------------
+# BUDGET POLICY INPUT (NEW)
+# -----------------------------------------------------------------------------
+
+input BudgetPolicyInput {
+  enabled: Boolean
+  dailyLimitUSD: Float
+  weeklyLimitUSD: Float
+  monthlyLimitUSD: Float
+  maxCostPerRequest: Float
+  alertThreshold: Float
+  criticalThreshold: Float
+  alertWebhook: String
+  alertEmails: [String!]
+  alertSlack: String
+  onExceeded: BudgetExceededAction
+  softLimitEnabled: Boolean
+  softLimitBuffer: Float
+}
+
+input CreateGroupInput {
+  name: String!
+  description: String
+  roleIds: [ID!]!
+}
+
+input UpdateGroupInput {
+  name: String
+  description: String
+  roleIds: [ID!]
+}
+
+input CreateAPIKeyInput {
+  name: String!
+  roleId: ID
+  groupId: ID
+  expiresAt: DateTime
+}
+
+input UpdateAPIKeyInput {
+  name: String
+  roleId: ID
+  groupId: ID
+}
+
+input CreateBudgetAlertInput {
+  name: String!
+  type: AlertType!
+  threshold: Float!
+  thresholdType: String!
+  period: AlertPeriod!
+  enabled: Boolean
+}
+
+input UpdateBudgetAlertInput {
+  name: String
+  threshold: Float
+  enabled: Boolean
+}
+
+input RequestLogFilter {
+  model: String
+  provider: Provider
+  status: String
+  apiKeyId: ID
+  startDate: DateTime
+  endDate: DateTime
+  search: String
+}
+
+# =============================================================================
+# TOOL POLICY
+# =============================================================================
+
+enum ToolPermissionStatus {
+  PENDING   # Tool awaiting admin decision (blocked by default)
+  ALLOWED   # Tool is allowed to be used
+  DENIED    # Tool is explicitly denied (request blocked with error)
+  REMOVED   # Tool is stripped from request silently (LLM won't see it)
+}
+
+# A tool discovered from incoming chat requests
+type DiscoveredTool {
+  id: ID!
+  name: String!
+  description: String!           # One-line description from tool spec
+  schemaHash: String!            # SHA256 of canonical JSON schema
+  parameters: JSON!              # Full JSON schema for parameters
+  category: String
+  firstSeenAt: DateTime!
+  lastSeenAt: DateTime!
+  firstSeenBy: String            # API Key ID that first used this tool
+  seenCount: Int!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+# Permission for a tool-role combination
+type ToolRolePermission {
+  id: ID!
+  tool: DiscoveredTool!
+  role: Role!
+  status: ToolPermissionStatus!
+  decidedBy: String
+  decidedByEmail: String
+  decidedAt: DateTime
+  decisionReason: String
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+# Tool with permission status for a specific role context
+type ToolWithPermission {
+  tool: DiscoveredTool!
+  status: ToolPermissionStatus!
+  decidedBy: String
+  decidedByEmail: String
+  decidedAt: DateTime
+  decisionReason: String
+}
+
+# Audit log for tool call attempts
+type ToolExecutionLog {
+  id: ID!
+  toolId: ID!
+  toolName: String!
+  roleId: ID!
+  apiKeyId: String
+  requestId: String
+  status: String!                # ALLOWED, BLOCKED
+  blockReason: String
+  executedAt: DateTime!
+  model: String
+}
+
+# Paginated tool list
+type DiscoveredToolConnection {
+  items: [DiscoveredTool!]!
+  totalCount: Int!
+  hasMore: Boolean!
+}
+
+# Paginated tool execution logs
+type ToolExecutionLogConnection {
+  items: [ToolExecutionLog!]!
+  totalCount: Int!
+  hasMore: Boolean!
+}
+
+# Filter for discovering tools
+input DiscoveredToolFilter {
+  name: String
+  category: String
+  status: ToolPermissionStatus   # Filter by permission status for a role
+  roleId: ID                     # Required if filtering by status
+}
+
+# Filter for tool execution logs
+input ToolExecutionLogFilter {
+  toolId: ID
+  roleId: ID
+  status: String
+  startDate: DateTime
+  endDate: DateTime
+}
+
+# Set permission for a tool-role combination
+input SetToolPermissionInput {
+  toolId: ID!
+  roleId: ID!
+  status: ToolPermissionStatus!
+  reason: String
+}
+
+# Bulk set permissions
+input SetToolPermissionsBulkInput {
+  roleId: ID!
+  permissions: [ToolPermissionEntry!]!
+}
+
+input ToolPermissionEntry {
+  toolId: ID!
+  status: ToolPermissionStatus!
+  reason: String
+}
+
+# =============================================================================
+# MCP GATEWAY TYPES
+# =============================================================================
+
+enum MCPServerType {
+  STDIO
+  SSE
+  WEBSOCKET
+}
+
+enum MCPAuthType {
+  NONE
+  API_KEY
+  BEARER
+  OAUTH2
+  BASIC
+  MTLS
+  AWS_IAM
+}
+
+enum MCPServerStatus {
+  PENDING
+  CONNECTED
+  DISCONNECTED
+  ERROR
+  DISABLED
+}
+
+enum MCPChangeType {
+  ADDED
+  REMOVED
+  MODIFIED
+}
+
+enum SearchStrategy {
+  REGEX
+  BM25
+  SEMANTIC
+  HYBRID
+}
+
+type MCPServer {
+  id: ID!
+  name: String!
+  description: String
+  serverType: MCPServerType!
+  endpoint: String!
+  authType: MCPAuthType!
+  version: String
+  status: MCPServerStatus!
+  lastHealthCheck: DateTime
+  lastSyncAt: DateTime
+  errorMessage: String
+  toolCount: Int!
+  tags: [String!]
+  autoSync: Boolean!
+  syncIntervalMinutes: Int!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  createdBy: String
+  
+  # Relations
+  tools: [MCPTool!]!
+  versions: [MCPServerVersion!]!
+}
+
+type MCPTool {
+  id: ID!
+  serverId: ID!
+  serverName: String!
+  name: String!
+  description: String
+  category: String
+  inputSchema: JSON!
+  inputExamples: [JSON!]
+  deferLoading: Boolean!
+  isDeprecated: Boolean!
+  deprecationMessage: String
+  executionCount: Int!
+  avgExecutionTimeMs: Int
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  
+  # Visibility for the given role
+  visibility(roleId: ID!): MCPToolVisibility!
+}
+
+# MCP tools grouped by server for policy management
+type MCPServerWithTools {
+  server: MCPServer!
+  tools: [MCPToolWithVisibility!]!
+  stats: MCPServerToolStats!
+}
+
+type MCPToolWithVisibility {
+  tool: MCPTool!
+  visibility: MCPToolVisibility!
+  decidedBy: String
+  decidedAt: DateTime
+}
+
+type MCPServerToolStats {
+  totalTools: Int!
+  allowedCount: Int!
+  searchCount: Int!
+  deniedCount: Int!
+}
+
+type MCPServerVersion {
+  id: ID!
+  serverId: ID!
+  version: String!
+  commitHash: String
+  toolCount: Int!
+  changes: [MCPSchemaChange!]!
+  changesSummary: String
+  hasBreakingChanges: Boolean!
+  createdAt: DateTime!
+  createdBy: String
+}
+
+type MCPSchemaChange {
+  type: MCPChangeType!
+  toolName: String!
+  field: String
+  oldValue: JSON
+  newValue: JSON
+  breaking: Boolean!
+}
+
+# MCPToolVisibility controls how a tool is exposed via MCP
+# DENY = Tool is completely hidden and blocked (default for new tools)
+# SEARCH = Tool is only available via tool_search, not in tools/list
+# ALLOW = Tool is visible in tools/list AND searchable
+enum MCPToolVisibility {
+  DENY
+  SEARCH
+  ALLOW
+}
+
+type MCPToolPermission {
+  id: ID!
+  roleId: ID!
+  serverId: ID!
+  toolId: ID!
+  visibility: MCPToolVisibility!
+  decidedBy: String
+  decidedByEmail: String
+  decidedAt: DateTime
+  decisionReason: String
+}
+
+type ToolSearchResult {
+  tool: MCPTool!
+  serverId: ID!
+  serverName: String!
+  score: Float!
+  matchReason: String
+  deferLoading: Boolean!
+  toolRef: String!
+}
+
+type ToolSearchResponse {
+  tools: [ToolSearchResult!]!
+  query: String!
+  totalAvailable: Int!
+  totalAllowed: Int!
+}
+
+type MCPToolExecution {
+  id: ID!
+  serverId: ID!
+  toolId: ID!
+  roleId: String
+  requestId: String
+  inputParams: JSON
+  outputResult: JSON
+  status: String!
+  errorMessage: String
+  startedAt: DateTime!
+  completedAt: DateTime
+  durationMs: Int
+}
+
+# MCP Inputs
+
+input CreateMCPServerInput {
+  name: String!
+  description: String
+  serverType: MCPServerType!
+  endpoint: String!
+  arguments: [String!]
+  environment: JSON
+  authType: MCPAuthType!
+  authConfig: MCPAuthConfigInput
+  tags: [String!]
+  autoSync: Boolean
+  syncIntervalMinutes: Int
+}
+
+input MCPAuthConfigInput {
+  apiKey: String
+  apiKeyHeader: String
+  bearerToken: String
+  clientId: String
+  clientSecret: String
+  tokenUrl: String
+  scopes: [String!]
+  username: String
+  password: String
+  clientCert: String
+  clientKey: String
+  caCert: String
+  awsRegion: String
+  awsRoleArn: String
+}
+
+input UpdateMCPServerInput {
+  name: String
+  description: String
+  endpoint: String
+  authType: MCPAuthType
+  authConfig: MCPAuthConfigInput
+  tags: [String!]
+  autoSync: Boolean
+  syncIntervalMinutes: Int
+}
+
+input ToolSearchInput {
+  query: String!
+  roleId: ID              # Optional: if provided, filters by role visibility (ALLOW/SEARCH)
+  strategy: SearchStrategy
+  serverIds: [ID!]
+  categories: [String!]
+  maxResults: Int
+  minScore: Float
+  includeSchema: Boolean
+}
+
+input SetMCPPermissionInput {
+  roleId: ID!
+  serverId: ID!
+  toolId: ID!
+  visibility: MCPToolVisibility!
+  reason: String
+}
+
+# =============================================================================
+# ADVANCED METRICS - Semantic Cache, Routing, Resilience, Health
+# =============================================================================
+
+# Cache metrics for semantic caching dashboard
+type CacheMetrics {
+  hits: Int!
+  misses: Int!
+  hitRate: Float!
+  tokensSaved: Int!
+  costSaved: Float!
+  avgLatencyMs: Float!
+  entries: Int!
+}
+
+# Strategy distribution for routing dashboard
+type StrategyCount {
+  strategy: String!
+  count: Int!
+}
+
+# Model switch tracking
+type ModelSwitch {
+  fromModel: String!
+  toModel: String!
+  count: Int!
+}
+
+# Routing metrics for intelligent routing dashboard
+type RoutingMetrics {
+  decisions: Int!
+  strategyDistribution: [StrategyCount!]!
+  modelSwitches: [ModelSwitch!]!
+  failures: Int!
+}
+
+# Circuit breaker state per provider
+type CircuitBreakerInfo {
+  provider: String!
+  state: String!  # closed, half_open, open
+  failures: Int!
+}
+
+# Resilience metrics for HA dashboard
+type ResilienceMetrics {
+  circuitBreakers: [CircuitBreakerInfo!]!
+  retryAttempts: Int!
+  fallbackInvocations: Int!
+  fallbackSuccessRate: Float!
+}
+
+# Provider health information
+type ProviderHealthInfo {
+  provider: String!
+  model: String!
+  healthScore: Float!
+  successRate: Float!
+  p95LatencyMs: Float!
+  requests: Int!
+}
+
+# Provider health metrics
+type ProviderHealthMetrics {
+  providers: [ProviderHealthInfo!]!
+}
+
+# Combined advanced metrics response
+type AdvancedMetrics {
+  cache: CacheMetrics!
+  routing: RoutingMetrics!
+  resilience: ResilienceMetrics!
+  providerHealth: ProviderHealthMetrics!
+}
+
+# =============================================================================
+# Agent Dashboard Types
+# =============================================================================
+
+# Token usage metrics broken down by type
+type TokenMetrics {
+  totalInput: Int!
+  totalOutput: Int!
+  totalThinking: Int!
+  totalCost: Float!
+  byModel: [ModelTokenBreakdown!]!
+}
+
+# Token breakdown per model
+type ModelTokenBreakdown {
+  model: String!
+  inputTokens: Int!
+  outputTokens: Int!
+  thinkingTokens: Int!
+  costUsd: Float!
+}
+
+# Cache performance metrics for agent dashboard
+type AgentCacheMetrics {
+  totalHits: Int!
+  totalMisses: Int!
+  hitRate: Float!
+  tokensSaved: Int!
+  costSaved: Float!
+}
+
+# Tool call statistics
+type ToolCallMetrics {
+  totalCalls: Int!
+  successCount: Int!
+  failureCount: Int!
+  successRate: Float!
+  byTool: [ToolCallBreakdown!]!
+}
+
+# Tool call breakdown per tool
+type ToolCallBreakdown {
+  toolName: String!
+  successCount: Int!
+  failureCount: Int!
+  totalCount: Int!
+}
+
+# Policy violation record
+type PolicyViolationRecord {
+  id: ID!
+  apiKeyId: ID
+  policyId: String!
+  policyName: String!
+  violationType: String!
+  severity: Int!
+  message: String
+  timestamp: DateTime!
+  metadata: String
+}
+
+# Policy violation summary
+type PolicyViolationSummary {
+  violationType: String!
+  count: Int!
+  avgSeverity: Float!
+}
+
+# Risk assessment for an agent
+type RiskAssessment {
+  overallRiskScore: Float!
+  riskLevel: String!
+  policyViolations: [PolicyViolationSummary!]!
+  recentViolations: [PolicyViolationRecord!]!
+  recommendations: [String!]!
+}
+
+# Provider and model usage statistics
+type ProviderModelUsage {
+  provider: String!
+  model: String!
+  requestCount: Int!
+  tokenCount: Int!
+  costUsd: Float!
+}
+
+# Complete agent dashboard statistics
+type AgentDashboardStats {
+  # Usage overview
+  providerModelUsage: [ProviderModelUsage!]!
+
+  # Token metrics
+  tokenMetrics: TokenMetrics!
+
+  # Cache performance
+  cacheMetrics: AgentCacheMetrics!
+
+  # Tool call statistics
+  toolCallMetrics: ToolCallMetrics!
+
+  # Risk assessment
+  riskAssessment: RiskAssessment!
+}
+
+# =============================================================================
+# QUERIES
+# =============================================================================
+
+type Query {
+  # Auth
+  me: User!
+  
+  # Admin Portal
+  tenants: [Tenant!]!
+  tenant(id: ID!): Tenant
+  tenantBySlug(slug: String!): Tenant
+  adminStats: TenantStats!
+  registrationRequests(status: String): [RegistrationRequest!]!
+  registrationRequest(id: ID!): RegistrationRequest
+  
+  # Tenant Admin - Providers & Models
+  providers: [ProviderConfig!]!
+  models: [Model!]!
+  availableModels: [Model!]!
+  
+  # RBAC
+  roles: [Role!]!
+  role(id: ID!): Role
+  groups: [Group!]!
+  group(id: ID!): Group
+  
+  # API Keys
+  apiKeys: [APIKey!]!
+  apiKey(id: ID!): APIKey
+  
+  # Users
+  users: [User!]!
+  user(id: ID!): User
+  
+  # Analytics
+  dashboard: DashboardStats!
+  requestLogs(filter: RequestLogFilter, first: Int, after: String): RequestLogConnection!
+  requestLog(id: ID!): RequestLogDetail
+  costAnalysis(startDate: DateTime, endDate: DateTime): CostAnalysis!
+  performance(startDate: DateTime, endDate: DateTime): PerformanceMetrics!
+
+  # Agent Dashboard
+  agentDashboard(apiKeyId: ID!, startTime: DateTime!, endTime: DateTime!): AgentDashboardStats!
+  
+  # Budget Alerts
+  budgetAlerts: [BudgetAlert!]!
+  budgetAlert(id: ID!): BudgetAlert
+  
+  # Audit Logs
+  auditLogs(filter: AuditLogFilter, limit: Int, offset: Int): AuditLogConnection!
+  auditLog(id: ID!): AuditLog
+  
+  # Tool Policy
+  discoveredTools(filter: DiscoveredToolFilter, limit: Int, offset: Int): DiscoveredToolConnection!
+  discoveredTool(id: ID!): DiscoveredTool
+  roleToolPermissions(roleId: ID!): [ToolWithPermission!]!
+  pendingTools: [DiscoveredTool!]!
+  toolExecutionLogs(filter: ToolExecutionLogFilter, limit: Int, offset: Int): ToolExecutionLogConnection!
+  
+  # MCP Gateway
+  mcpServers: [MCPServer!]!
+  mcpServer(id: ID!): MCPServer
+  mcpTools(serverId: ID, category: String): [MCPTool!]!
+  mcpTool(id: ID!): MCPTool
+  searchTools(input: ToolSearchInput!): ToolSearchResponse!
+  mcpServerVersions(serverId: ID!): [MCPServerVersion!]!
+  mcpPermissions(roleId: ID!): [MCPToolPermission!]!
+  mcpToolExecutions(limit: Int, offset: Int): [MCPToolExecution!]!
+  
+  # MCP Tools grouped by server for policy management
+  mcpServersWithTools(roleId: ID!): [MCPServerWithTools!]!
+  
+  # Advanced Metrics - Cache, Routing, Resilience, Health
+  advancedMetrics: AdvancedMetrics!
+  cacheMetrics: CacheMetrics!
+  routingMetrics: RoutingMetrics!
+  resilienceMetrics: ResilienceMetrics!
+  providerHealthMetrics: ProviderHealthMetrics!
+}
+
+# =============================================================================
+# MUTATIONS
+# =============================================================================
+
+type Mutation {
+  # Auth
+  login(input: LoginInput!): AuthPayload!
+  logout: Boolean!
+
+  # Public - Registration
+  createRegistrationRequest(input: CreateRegistrationRequestInput!): RegistrationRequest!
+
+  # Admin Portal - Tenants
+  createTenant(input: CreateTenantInput!): Tenant!
+  updateTenant(id: ID!, input: UpdateTenantInput!): Tenant!
+  deleteTenant(id: ID!): Boolean!
+
+  # Admin Portal - Registration Requests
+  approveRegistration(input: ApproveRegistrationInput!): Tenant!
+  rejectRegistration(input: RejectRegistrationInput!): Boolean!
+  
+  # Tenant Admin - Providers
+  updateProvider(input: UpdateProviderInput!): ProviderConfig!
+
+  # Multi-Key Management
+  addProviderAPIKey(input: AddProviderAPIKeyInput!): ProviderAPIKey!
+  updateProviderAPIKey(input: UpdateProviderAPIKeyInput!): ProviderAPIKey!
+  deleteProviderAPIKey(id: ID!): Boolean!
+
+  # Tenant Admin - Models
+  enableModel(modelId: ID!): Model!
+  disableModel(modelId: ID!): Model!
+  refreshProviderModels(provider: Provider!): RefreshModelsResult!
+  
+  # RBAC - Roles
+  createRole(input: CreateRoleInput!): Role!
+  updateRole(id: ID!, input: UpdateRoleInput!): Role!
+  updateRolePolicy(roleId: ID!, input: RolePolicyInput!): RolePolicy!
+  deleteRole(id: ID!): Boolean!
+  
+  # RBAC - Groups
+  createGroup(input: CreateGroupInput!): Group!
+  updateGroup(id: ID!, input: UpdateGroupInput!): Group!
+  deleteGroup(id: ID!): Boolean!
+  
+  # API Keys
+  createAPIKey(input: CreateAPIKeyInput!): APIKeyWithSecret!
+  updateAPIKey(id: ID!, input: UpdateAPIKeyInput!): APIKey!
+  deleteAPIKey(id: ID!): Boolean!
+  revokeAPIKey(id: ID!): Boolean!
+  
+  # Users
+  createUser(email: String!, name: String!, password: String!, role: String!): User!
+  updateUser(id: ID!, name: String, role: String): User!
+  deleteUser(id: ID!): Boolean!
+  
+  # Budget Alerts
+  createBudgetAlert(input: CreateBudgetAlertInput!): BudgetAlert!
+  updateBudgetAlert(id: ID!, input: UpdateBudgetAlertInput!): BudgetAlert!
+  deleteBudgetAlert(id: ID!): Boolean!
+  
+  # Tool Policy
+  setToolPermission(input: SetToolPermissionInput!): ToolRolePermission!
+  setToolPermissionsBulk(input: SetToolPermissionsBulkInput!): [ToolRolePermission!]!
+  approveAllPendingTools(roleId: ID!): Int!
+  denyAllPendingTools(roleId: ID!): Int!
+  removeAllPendingTools(roleId: ID!): Int!   # Set all pending tools to REMOVED status
+  deleteDiscoveredTool(id: ID!): Boolean!
+  
+  # MCP Gateway
+  createMCPServer(input: CreateMCPServerInput!): MCPServer!
+  updateMCPServer(id: ID!, input: UpdateMCPServerInput!): MCPServer!
+  deleteMCPServer(id: ID!): Boolean!
+  connectMCPServer(id: ID!): MCPServer!
+  disconnectMCPServer(id: ID!): MCPServer!
+  syncMCPServer(id: ID!): MCPServerVersion!
+  rollbackMCPServer(serverId: ID!, versionId: ID!): MCPServer!
+  setMCPPermission(input: SetMCPPermissionInput!): MCPToolPermission!
+  bulkSetMCPVisibility(roleId: ID!, serverId: ID!, visibility: MCPToolVisibility!): Int!
+  addToolExample(toolId: ID!, example: JSON!): MCPTool!
+  removeToolExample(toolId: ID!, exampleIndex: Int!): MCPTool!
+}
+
+# =============================================================================
+# SUBSCRIPTIONS (for real-time updates)
+# =============================================================================
+
+type Subscription {
+  # Real-time request logs
+  requestLogAdded: RequestLog!
+  
+  # Dashboard stats updates
+  dashboardUpdated: DashboardStats!
+  
+  # Budget alert triggered
+  budgetAlertTriggered(alertId: ID): BudgetAlert!
+}
+

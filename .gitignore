@@ -1,0 +1,93 @@
+# Binaries
+build/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+modelgate
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool
+coverage.out
+coverage.html
+
+# Dependency directories
+vendor/
+
+# Generated protobuf files
+api/proto/gen/
+
+# IDE specific files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Environment files (may contain secrets)
+.env
+.env.local
+.env.*.local
+*.env
+
+# Config files with secrets (use config.example.toml as template)
+config.toml
+config.yaml
+config.json
+!config.example.toml
+
+# Log files
+*.log
+
+# Temporary files
+tmp/
+temp/
+
+# Docker volumes (if mounted locally)
+prometheus-data/
+grafana-data/
+ollama-data/
+postgres-data/
+
+# Web build output (generated)
+web/dist/
+
+# Node modules
+web/node_modules/
+node_modules/
+
+# PID files
+*.pid
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+.Python
+venv/
+.venv/
+
+# API keys and secrets
+examples/key
+**/key
+**/secret*
+**/*.key
+**/*.pem
+
+# Duplicate config examples
+config.toml.example
+
+examples/venv/

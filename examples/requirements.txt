@@ -1,0 +1,6 @@
+# Requirements for ModelGate Python examples
+requests>=2.28.0
+
+# MCP (Model Context Protocol) SDK for tool integration
+mcp>=1.0.0
+

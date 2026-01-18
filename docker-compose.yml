@@ -1,0 +1,91 @@
+version: '3.8'
+
+services:
+  # PostgreSQL with pgvector extension
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: modelgate-postgres
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-modelgate}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Ollama for embeddings (semantic search, tool discovery, caching)
+  ollama:
+    image: ollama/ollama:latest
+    container_name: modelgate-ollama
+    ports:
+      - "${OLLAMA_PORT:-11434}:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Pull embedding model on startup (runs once)
+  ollama-init:
+    image: ollama/ollama:latest
+    container_name: modelgate-ollama-init
+    depends_on:
+      ollama:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        echo "Pulling nomic-embed-text model for embeddings..."
+        ollama pull nomic-embed-text
+        echo "✅ Embedding model ready"
+    environment:
+      - OLLAMA_HOST=ollama:11434
+    restart: "no"
+
+  # ModelGate Server (Unified API: OpenAI + GraphQL + Web UI + MCP)
+  modelgate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: modelgate-server
+    ports:
+      - "${HTTP_PORT:-8080}:8080"
+    environment:
+      # Database
+      - MODELGATE_DB_DRIVER=postgres
+      - MODELGATE_DB_HOST=postgres
+      - MODELGATE_DB_PORT=5432
+      - MODELGATE_DB_USER=${POSTGRES_USER:-postgres}
+      - MODELGATE_DB_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - MODELGATE_DB_NAME=${POSTGRES_DB:-modelgate}
+      - MODELGATE_DB_SSL_MODE=disable
+      # Embedder (for semantic search & caching)
+      - MODELGATE_EMBEDDER_TYPE=ollama
+      - MODELGATE_EMBEDDER_URL=http://ollama:11434
+      - MODELGATE_EMBEDDER_MODEL=nomic-embed-text
+      # Optional: OpenAI API key for providers
+      - MODELGATE_OPENAI_API_KEY=${OPENAI_API_KEY:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+      ollama-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  ollama_data:
