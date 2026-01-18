@@ -71,13 +71,15 @@ Protect your LLM applications with **advanced prompt injection detection** using
 ## Features
 
 ### 🔌 Multi-Provider Support
-- **OpenAI** - GPT-4o, GPT-4o-mini, O1, O3, embeddings
-- **Anthropic** - Claude Opus 4, Claude Sonnet 4, Claude Haiku
-- **Google Gemini** - Gemini 2.5 Pro, Gemini 2.5 Flash
-- **AWS Bedrock** - Claude, Nova, Llama, Mistral
-- **Azure OpenAI** - All Azure-hosted models
-- **Ollama** - Local models (Llama, Qwen, etc.)
-- **Groq, Mistral, Together AI, Cohere**
+- **OpenAI** - GPT-5.2, GPT-5.2-mini, GPT-5.2-nano, O3, O4-mini, embeddings
+- **Anthropic** - Claude 4.5 Opus, Claude 4.5 Sonnet, Claude 4.5 Haiku
+- **Google Gemini** - Gemini 2.5 Pro, Gemini 2.5 Flash, Gemini 2.0 Flash
+- **AWS Bedrock** - Claude (Sonnet, Haiku), Nova Pro/Lite/Micro, Llama 3, Mistral
+- **Azure OpenAI** - All Azure-hosted OpenAI models
+- **Ollama** - Local models (Llama 3.2, Qwen 3, Mistral, etc.)
+- **Groq** - Llama, Mixtral with ultra-low latency
+- **Mistral AI** - Mistral Large, Medium, Small
+- **Together AI, Cohere** - Various open-source models
 
 ### 🚀 OpenAI-Compatible API
 Drop-in replacement for OpenAI API with full streaming support. Use with any OpenAI SDK.
@@ -295,7 +297,7 @@ docker-compose --profile with-ollama up -d
 docker-compose up -d
 ```
 
-Access the dashboard at **http://localhost:3000**
+Access the dashboard at **http://localhost:8080**
 
 Default login: `admin@modelgate.local` / `admin123`
 
@@ -321,10 +323,9 @@ make build
 # 4. Start the server (auto-applies schema)
 ./bin/modelgate
 
-# 5. Start the Web UI (development)
-cd web
-npm install
-npm run dev
+# Web UI is automatically served at http://localhost:8080
+# For frontend development with hot-reload:
+cd web && pnpm install && pnpm run dev
 ```
 
 ---
@@ -353,8 +354,7 @@ docker-compose logs -f modelgate
 | `POSTGRES_USER` | postgres | Database user |
 | `POSTGRES_PASSWORD` | postgres | Database password |
 | `POSTGRES_DB` | modelgate | Database name |
-| `HTTP_PORT` | 8080 | Unified API port (OpenAI + GraphQL + MCP) |
-| `WEB_PORT` | 3000 | Web UI port |
+| `HTTP_PORT` | 8080 | Unified port (API + Web UI + GraphQL + MCP) |
 | `EMBEDDER_TYPE` | ollama | `ollama` or `openai` |
 | `EMBEDDER_URL` | http://ollama:11434 | Ollama server URL |
 | `OPENAI_API_KEY` | - | Required for OpenAI embeddings |
@@ -485,7 +485,7 @@ The config file contains **server settings only**. Provider API keys and models 
 
 ```toml
 [server]
-http_port = 8080          # Unified API (OpenAI + GraphQL + MCP)
+http_port = 8080          # Unified port (API + Web UI + GraphQL + MCP)
 bind_address = "0.0.0.0"
 
 [database]

@@ -25,6 +25,8 @@ python chat.py
 | `mcp_client.py` | MCP tool integration with LLM |
 | `mcp_server.py` | MCP server with utility tools |
 | `local_mcp_server.py` | Local MCP test server |
+| `modelgate_mcp_agent.py` | Full MCP agent with tool orchestration |
+| `modelgate_mcp_toolsearch_demo.py` | Semantic tool search demo |
 
 ## Chat Client
 
@@ -53,6 +55,23 @@ python mcp_client.py
 ```
 
 Available tools: `read_file`, `write_file`, `list_directory`, `execute_command`, `parse_json`, `parse_csv`, `calculate`, `get_datetime`, `search_files`, `file_info`
+
+## MCP Agent Demo
+
+```bash
+# Run the full MCP agent with tool orchestration
+python modelgate_mcp_agent.py --api-key mg_your_key
+```
+
+## Semantic Tool Search Demo
+
+Demonstrates the `search_tools` capability for discovering tools by natural language description:
+
+```bash
+python modelgate_mcp_toolsearch_demo.py --api-key mg_your_key
+```
+
+This demo shows how AI agents can discover tools dynamically using semantic search.
 
 ## Using OpenAI SDK
 
