@@ -1,0 +1,87 @@
+╔══════════════════════════════════════════════════════════════════╗
+║                    ModelGate Deployed!                            ║
+╚══════════════════════════════════════════════════════════════════╝
+
+Thank you for installing {{ .Chart.Name }}!
+
+Your release is named: {{ .Release.Name }}
+Namespace: {{ .Release.Namespace }}
+
+=== Accessing ModelGate ===
+
+{{- if .Values.ingress.enabled }}
+ModelGate is available at:
+{{- range $host := .Values.ingress.hosts }}
+  {{- range .paths }}
+  http{{ if $.Values.ingress.tls }}s{{ end }}://{{ $host.host }}{{ .path }}
+  {{- end }}
+{{- end }}
+{{- else if contains "NodePort" .Values.service.type }}
+Get the application URL by running:
+  export NODE_PORT=$(kubectl get --namespace {{ .Release.Namespace }} -o jsonpath="{.spec.ports[0].nodePort}" services {{ include "modelgate.fullname" . }})
+  export NODE_IP=$(kubectl get nodes --namespace {{ .Release.Namespace }} -o jsonpath="{.items[0].status.addresses[0].address}")
+  echo "ModelGate: http://$NODE_IP:$NODE_PORT"
+{{- else if contains "LoadBalancer" .Values.service.type }}
+Get the application URL by running (may take a few minutes for IP):
+  export SERVICE_IP=$(kubectl get svc --namespace {{ .Release.Namespace }} {{ include "modelgate.fullname" . }} --template "{{"{{ range (index .status.loadBalancer.ingress 0) }}{{.}}{{ end }}"}}")
+  echo "ModelGate: http://$SERVICE_IP:{{ .Values.service.port }}"
+{{- else if contains "ClusterIP" .Values.service.type }}
+Forward the port to access ModelGate locally:
+  kubectl port-forward --namespace {{ .Release.Namespace }} svc/{{ include "modelgate.fullname" . }} 8080:{{ .Values.service.port }}
+
+Then access:
+  Web UI:      http://localhost:8080
+  API:         http://localhost:8080/v1/
+  GraphQL:     http://localhost:8080/graphql
+  Playground:  http://localhost:8080/playground
+{{- end }}
+
+=== Default Credentials ===
+
+  Email:    {{ .Values.admin.email }}
+  Password: (check your values or secret)
+
+⚠️  IMPORTANT: Change the default password in production!
+
+=== Components ===
+
+{{- if .Values.postgresql.enabled }}
+✅ PostgreSQL: Enabled (with pgvector)
+   Internal: {{ include "modelgate.databaseHost" . }}:5432
+{{- else }}
+⚠️  PostgreSQL: External ({{ .Values.config.database.host }}:{{ .Values.config.database.port }})
+{{- end }}
+
+{{- if .Values.ollama.enabled }}
+✅ Ollama: Enabled
+   Internal: {{ include "modelgate.ollamaUrl" . }}
+   Models: {{ join ", " .Values.ollama.models }}
+{{- else }}
+⚠️  Ollama: External ({{ .Values.config.embedder.baseUrl }})
+{{- end }}
+
+=== Next Steps ===
+
+1. Access the Web UI and login with admin credentials
+2. Configure your LLM providers (OpenAI, Anthropic, Bedrock, etc.)
+3. Create roles and API keys for your applications
+4. Start making requests to the API!
+
+For documentation, visit: https://github.com/mazori-ai/modelgate
+
+=== Useful Commands ===
+
+View logs:
+  kubectl logs -f -l app.kubernetes.io/name={{ include "modelgate.name" . }} -n {{ .Release.Namespace }}
+
+Check pod status:
+  kubectl get pods -l app.kubernetes.io/name={{ include "modelgate.name" . }} -n {{ .Release.Namespace }}
+
+{{- if .Values.metrics.serviceMonitor.enabled }}
+
+=== Prometheus Metrics ===
+
+ServiceMonitor is enabled. Metrics available at:
+  {{ .Values.config.telemetry.metricsPath }}
+{{- end }}
+

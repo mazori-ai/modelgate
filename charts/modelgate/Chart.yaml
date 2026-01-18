@@ -1,0 +1,28 @@
+apiVersion: v2
+name: modelgate
+description: Open Source LLM Gateway with Policy Enforcement, MCP Support & Intelligent Routing
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - llm
+  - gateway
+  - ai
+  - mcp
+  - openai
+  - anthropic
+  - bedrock
+home: https://github.com/mazori-ai/modelgate
+sources:
+  - https://github.com/mazori-ai/modelgate
+maintainers:
+  - name: ModelGate Team
+    url: https://github.com/mazori-ai
+
+# Dependencies
+dependencies:
+  - name: postgresql
+    version: "15.5.0"
+    repository: "https://charts.bitnami.com/bitnami"
+    condition: postgresql.enabled
+

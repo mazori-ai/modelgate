@@ -1,11 +1,13 @@
 # Binaries
 build/
+bin/
+cmd/
 *.exe
 *.exe~
 *.dll
 *.so
 *.dylib
-modelgate
+/modelgate
 
 # Test binary, built with `go test -c`
 *.test
@@ -83,9 +85,10 @@ venv/
 # API keys and secrets
 examples/key
 **/key
-**/secret*
 **/*.key
 **/*.pem
+**/secrets/
+*.secret
 
 # Duplicate config examples
 config.toml.example

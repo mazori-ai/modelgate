@@ -1,0 +1,40 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "modelgate.fullname" . }}-config
+  labels:
+    {{- include "modelgate.labels" . | nindent 4 }}
+data:
+  config.toml: |
+    [server]
+    http_port = {{ .Values.config.server.httpPort }}
+    bind_address = "{{ .Values.config.server.bindAddress }}"
+
+    [database]
+    driver = "{{ .Values.config.database.driver }}"
+    host = "{{ include "modelgate.databaseHost" . }}"
+    port = {{ .Values.config.database.port }}
+    user = "{{ include "modelgate.databaseUser" . }}"
+    database = "{{ include "modelgate.databaseName" . }}"
+    ssl_mode = "{{ .Values.config.database.sslMode }}"
+    max_open_conns = {{ .Values.config.database.maxOpenConns }}
+    max_idle_conns = {{ .Values.config.database.maxIdleConns }}
+    conn_max_lifetime = "{{ .Values.config.database.connMaxLifetime }}"
+
+    [embedder]
+    type = "{{ .Values.config.embedder.type }}"
+    base_url = "{{ include "modelgate.ollamaUrl" . }}"
+    model = "{{ .Values.config.embedder.model }}"
+
+    [telemetry]
+    log_level = "{{ .Values.config.telemetry.logLevel }}"
+    metrics_enabled = {{ .Values.config.telemetry.metricsEnabled }}
+    metrics_path = "{{ .Values.config.telemetry.metricsPath }}"
+
+    {{- if .Values.config.aliases }}
+    [aliases]
+    {{- range $key, $value := .Values.config.aliases }}
+    {{ $key }} = "{{ $value }}"
+    {{- end }}
+    {{- end }}
+
