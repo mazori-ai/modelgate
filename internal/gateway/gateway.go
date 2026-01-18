@@ -138,24 +138,24 @@ func (s *Service) getSeverityFromViolation(violation *policy.PolicyViolation) in
 	// Map violation codes to severity levels
 	severityMap := map[string]int{
 		// Critical violations (5)
-		"injection_detected":      5,
-		"pii_detected":            5,
+		"injection_detected": 5,
+		"pii_detected":       5,
 
 		// High violations (4)
-		"tool_blocked":            4,
-		"model_not_allowed":       4,
-		"tools_not_allowed":       4,
+		"tool_blocked":      4,
+		"model_not_allowed": 4,
+		"tools_not_allowed": 4,
 
 		// Medium violations (3)
-		"blocked_content":         3,
-		"rate_limit_exceeded":     3,
+		"blocked_content":           3,
+		"rate_limit_exceeded":       3,
 		"token_rate_limit_exceeded": 3,
-		"tool_not_allowed":        3,
+		"tool_not_allowed":          3,
 
 		// Low violations (2)
-		"too_many_tools":          2,
-		"too_many_messages":       2,
-		"prompt_too_long":         2,
+		"too_many_tools":    2,
+		"too_many_messages": 2,
+		"prompt_too_long":   2,
 	}
 
 	if severity, ok := severityMap[violation.Code]; ok {
@@ -235,8 +235,8 @@ func (s *Service) getClientForTenant(ctx context.Context, tenantID string, tenan
 		if cacheService != nil && cacheService.GetCache(tenantID, providerType) == nil {
 			// Load model cache from database on first access
 			if err := cacheService.LoadFromDatabase(ctx, tenantStore, tenantID, providerType); err != nil {
-				slog.Warn("Failed to load model cache from database", 
-					"tenant_id", tenantID, 
+				slog.Warn("Failed to load model cache from database",
+					"tenant_id", tenantID,
 					"provider", providerType,
 					"error", err)
 			}
@@ -253,12 +253,12 @@ func (s *Service) getClientForTenant(ctx context.Context, tenantID string, tenan
 			} else if strings.HasPrefix(model, "aws-bedrock/") {
 				modelToCheck = strings.TrimPrefix(model, "aws-bedrock/")
 			}
-			
+
 			for _, am := range availableModels {
 				// Check if the model matches (with or without prefix)
-				if am.ModelID == model || am.ModelID == modelToCheck || 
-				   strings.HasSuffix(am.ModelID, "/"+modelToCheck) ||
-				   strings.Contains(am.ModelID, modelToCheck) {
+				if am.ModelID == model || am.ModelID == modelToCheck ||
+					strings.HasSuffix(am.ModelID, "/"+modelToCheck) ||
+					strings.Contains(am.ModelID, modelToCheck) {
 					if am.IsAvailable && !am.IsDeprecated {
 						modelEnabled = true
 						break
@@ -581,25 +581,25 @@ func (s *Service) ChatStream(ctx context.Context, req *domain.ChatRequest) (<-ch
 						s.healthTracker.RecordSuccess(ctx, "", string(providerType), req.Model, int(latencyMs))
 					}
 
-				// =========================================================================
-				// 9. USAGE TRACKING - Record API usage
-				// =========================================================================
-				if s.usageRepo != nil {
-					s.recordUsage(ctx, req, inputTokens, outputTokens, costUSD, time.Since(startTime), true, "")
-				}
-			} else if finish.Reason == domain.FinishReasonError {
-				if recorder != nil {
-					recorder.RecordError("stream_error")
-				}
+					// =========================================================================
+					// 9. USAGE TRACKING - Record API usage
+					// =========================================================================
+					if s.usageRepo != nil {
+						s.recordUsage(ctx, req, inputTokens, outputTokens, costUSD, time.Since(startTime), true, "")
+					}
+				} else if finish.Reason == domain.FinishReasonError {
+					if recorder != nil {
+						recorder.RecordError("stream_error")
+					}
 
-				// Record failure in health tracker
-				if s.healthTracker != nil {
-					s.healthTracker.RecordFailure(ctx, "", string(providerType), req.Model, "stream_error")
-				}
+					// Record failure in health tracker
+					if s.healthTracker != nil {
+						s.healthTracker.RecordFailure(ctx, "", string(providerType), req.Model, "stream_error")
+					}
 
-				if s.usageRepo != nil {
-					s.recordUsage(ctx, req, inputTokens, outputTokens, costUSD, time.Since(startTime), false, "stream_error")
-				}
+					if s.usageRepo != nil {
+						s.recordUsage(ctx, req, inputTokens, outputTokens, costUSD, time.Since(startTime), false, "stream_error")
+					}
 				}
 			}
 		}

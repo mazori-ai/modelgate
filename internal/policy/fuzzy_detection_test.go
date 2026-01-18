@@ -128,10 +128,10 @@ func TestFuzzyContainsWindow(t *testing.T) {
 
 func TestWordJaccard(t *testing.T) {
 	tests := []struct {
-		name     string
-		a        string
-		b        string
-		minSim   float64
+		name   string
+		a      string
+		b      string
+		minSim float64
 	}{
 		{
 			name:   "identical",
@@ -425,4 +425,3 @@ func BenchmarkFullDetection(b *testing.B) {
 		DetectPromptInjectionFuzzy(content, config)
 	}
 }
-

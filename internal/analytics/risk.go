@@ -8,11 +8,11 @@ import (
 
 // RiskWeights defines the weight multipliers for different violation types
 var RiskWeights = map[string]float64{
-	"authentication": 5.0,  // Critical - auth failures are high risk
-	"tool_access":    3.0,  // High - unauthorized tool access
-	"rate_limit":     2.0,  // Medium - excessive requests
-	"cost_limit":     1.5,  // Low-Medium - budget concerns
-	"generic":        1.0,  // Baseline
+	"authentication": 5.0, // Critical - auth failures are high risk
+	"tool_access":    3.0, // High - unauthorized tool access
+	"rate_limit":     2.0, // Medium - excessive requests
+	"cost_limit":     1.5, // Low-Medium - budget concerns
+	"generic":        1.0, // Baseline
 }
 
 // CalculateRiskScore calculates a risk score based on policy violations

@@ -24,10 +24,10 @@ import (
 // This allows agents to discover and use tools from all connected MCP servers
 // via a single unified interface with the tool_search capability.
 type MCPServer struct {
-	gateway    *Gateway
-	stores     map[string]*postgres.TenantStore
-	store      *postgres.Store
-	mu         sync.RWMutex
+	gateway *Gateway
+	stores  map[string]*postgres.TenantStore
+	store   *postgres.Store
+	mu      sync.RWMutex
 
 	// Server configuration
 	serverInfo   ServerInfo
@@ -132,9 +132,9 @@ type ContentBlock struct {
 
 // AuthenticatedClient represents an authenticated MCP client connection
 type AuthenticatedClient struct {
-	TenantSlug string
-	RoleID     string
-	APIKeyID   string
+	TenantSlug  string
+	RoleID      string
+	APIKeyID    string
 	ClientInfo  ClientInfo
 	ConnectedAt time.Time
 }
@@ -227,9 +227,9 @@ func (s *MCPServer) authenticateRequest(r *http.Request) (*AuthenticatedClient, 
 	}
 
 	return &AuthenticatedClient{
-		TenantSlug: tenantSlug,
-		RoleID:     apiKeyObj.RoleID,
-		APIKeyID:   apiKeyObj.ID,
+		TenantSlug:  tenantSlug,
+		RoleID:      apiKeyObj.RoleID,
+		APIKeyID:    apiKeyObj.ID,
 		ConnectedAt: time.Now(),
 	}, nil
 }
@@ -530,9 +530,9 @@ func (s *MCPServer) handleCallTool(ctx context.Context, client *AuthenticatedCli
 	}
 
 	store.LogMCPToolExecution(ctx, &domain.MCPToolExecution{
-		ID:       uuid.New().String(),
-		ServerID: targetServer.ID,
-		ToolID:   tool.ID,
+		ID:           uuid.New().String(),
+		ServerID:     targetServer.ID,
+		ToolID:       tool.ID,
 		RoleID:       client.RoleID,
 		APIKeyID:     client.APIKeyID,
 		InputParams:  params.Arguments,

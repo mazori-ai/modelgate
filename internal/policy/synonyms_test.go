@@ -48,8 +48,8 @@ func TestGetCanonical(t *testing.T) {
 		expected string
 	}{
 		// These map to what's first in the synonym groups
-		{"discard", "forget"},   // "discard" is a synonym of "forget"
-		{"skip", "bypass"},      // "skip" is a synonym of "bypass"
+		{"discard", "forget"}, // "discard" is a synonym of "forget"
+		{"skip", "bypass"},    // "skip" is a synonym of "bypass"
 		{"prior", "previous"},
 		{"earlier", "previous"},
 		{"directives", "instructions"},
@@ -98,7 +98,7 @@ func TestExpandPatternWithSynonyms(t *testing.T) {
 				}
 			}
 			if !found {
-				t.Errorf("ExpandPatternWithSynonyms(%q) does not contain %q\nGot: %v", 
+				t.Errorf("ExpandPatternWithSynonyms(%q) does not contain %q\nGot: %v",
 					tt.pattern, tt.expectContain, expanded[:min(len(expanded), 10)])
 			}
 		})
@@ -130,13 +130,13 @@ func TestExpandedPatternCategoryContainsSynonyms(t *testing.T) {
 
 func TestDiscardPreviousInstructionsDetected(t *testing.T) {
 	config := domain.PatternDetectionConfig{
-		Enabled:                    true,
-		DetectIgnoreInstructions:   true,
-		EnableFuzzyMatching:        true,
-		EnableNormalization:        true,
-		EnableWordMatching:         true,
-		FuzzyThreshold:             0.85,
-		Sensitivity:                domain.SensitivityMedium,
+		Enabled:                  true,
+		DetectIgnoreInstructions: true,
+		EnableFuzzyMatching:      true,
+		EnableNormalization:      true,
+		EnableWordMatching:       true,
+		FuzzyThreshold:           0.85,
+		Sensitivity:              domain.SensitivityMedium,
 	}
 
 	tests := []struct {
@@ -213,11 +213,11 @@ func TestExpandedCategoriesHaveMorePatterns(t *testing.T) {
 	}
 
 	if expandedCount <= baseCount {
-		t.Errorf("Expanded patterns (%d) should be more than base patterns (%d)", 
+		t.Errorf("Expanded patterns (%d) should be more than base patterns (%d)",
 			expandedCount, baseCount)
 	}
 
-	t.Logf("Base patterns: %d, Expanded patterns: %d (%.1fx increase)", 
+	t.Logf("Base patterns: %d, Expanded patterns: %d (%.1fx increase)",
 		baseCount, expandedCount, float64(expandedCount)/float64(baseCount))
 }
 
@@ -262,4 +262,3 @@ func BenchmarkDetectionWithSynonyms(b *testing.B) {
 		DetectPromptInjectionFuzzy(content, config)
 	}
 }
-

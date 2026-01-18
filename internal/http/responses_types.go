@@ -3,13 +3,13 @@ package http
 
 // ResponsesRequest is the HTTP request for POST /v1/responses
 type ResponsesRequest struct {
-	Model          string                `json:"model"`
-	Messages       []ChatMessage         `json:"messages"` // Reuse ChatMessage from types.go
-	ResponseSchema ResponsesSchemaInput  `json:"response_schema"`
-	Temperature    *float32              `json:"temperature,omitempty"`
-	MaxTokens      *int32                `json:"max_tokens,omitempty"`
-	TopP           *float32              `json:"top_p,omitempty"`
-	User           *string               `json:"user,omitempty"`
+	Model          string               `json:"model"`
+	Messages       []ChatMessage        `json:"messages"` // Reuse ChatMessage from types.go
+	ResponseSchema ResponsesSchemaInput `json:"response_schema"`
+	Temperature    *float32             `json:"temperature,omitempty"`
+	MaxTokens      *int32               `json:"max_tokens,omitempty"`
+	TopP           *float32             `json:"top_p,omitempty"`
+	User           *string              `json:"user,omitempty"`
 }
 
 // ResponsesSchemaInput defines the JSON schema for the request

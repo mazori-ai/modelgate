@@ -68,12 +68,14 @@ func (r *mutationResolver) CreateRegistrationRequest(ctx context.Context, input 
 }
 
 // Placeholder to maintain code structure - original returned:
-// &model.RegistrationRequest{
-//     ID:                req.ID,
-//     OrganizationName:  req.OrganizationName,
-//     OrganizationEmail: req.OrganizationEmail,
-//     AdminName:         req.AdminName,
-//     AdminEmail:        req.AdminEmail,
+//
+//	&model.RegistrationRequest{
+//	    ID:                req.ID,
+//	    OrganizationName:  req.OrganizationName,
+//	    OrganizationEmail: req.OrganizationEmail,
+//	    AdminName:         req.AdminName,
+//	    AdminEmail:        req.AdminEmail,
+//
 // CreateTenant is the resolver for the createTenant field.
 // Not supported in single-tenant open source edition
 func (r *mutationResolver) CreateTenant(ctx context.Context, input model.CreateTenantInput) (*model.Tenant, error) {
@@ -1310,9 +1312,9 @@ func (r *mutationResolver) CreateMCPServer(ctx context.Context, input model.Crea
 	serverSlug := mcp.SanitizeServerName(input.Name)
 
 	server := &domain.MCPServer{
-		Name:        input.Name,
-		Slug:        serverSlug,
-		Description: ptrToString(input.Description),
+		Name:                input.Name,
+		Slug:                serverSlug,
+		Description:         ptrToString(input.Description),
 		ServerType:          graphqlToMCPServerType(input.ServerType),
 		Endpoint:            input.Endpoint,
 		AuthType:            graphqlToMCPAuthType(input.AuthType),

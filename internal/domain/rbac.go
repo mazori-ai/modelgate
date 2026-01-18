@@ -254,15 +254,15 @@ type PatternDetectionConfig struct {
 	CustomWarnPatterns         []string `json:"custom_warn_patterns"`
 
 	// Fuzzy matching configuration (new)
-	EnableFuzzyMatching    bool        `json:"enable_fuzzy_matching"`    // Enable Levenshtein-based fuzzy matching
-	EnableWordMatching     bool        `json:"enable_word_matching"`     // Enable word-level Jaccard similarity
-	EnableNormalization    bool        `json:"enable_normalization"`     // Enable text normalization (homoglyphs, l33t)
-	DisableFuzzyMatching   bool        `json:"disable_fuzzy_matching"`   // Explicitly disable fuzzy matching
-	DisableWordMatching    bool        `json:"disable_word_matching"`    // Explicitly disable word matching
-	DisableNormalization   bool        `json:"disable_normalization"`    // Explicitly disable normalization
-	FuzzyThreshold         float64              `json:"fuzzy_threshold"`          // Similarity threshold (0.0-1.0, default 0.85)
-	Sensitivity            DetectionSensitivity `json:"sensitivity"`              // low, medium, high, paranoid
-	WhitelistedPhrases     []string             `json:"whitelisted_phrases"`      // Phrases to exclude from detection
+	EnableFuzzyMatching  bool                 `json:"enable_fuzzy_matching"`  // Enable Levenshtein-based fuzzy matching
+	EnableWordMatching   bool                 `json:"enable_word_matching"`   // Enable word-level Jaccard similarity
+	EnableNormalization  bool                 `json:"enable_normalization"`   // Enable text normalization (homoglyphs, l33t)
+	DisableFuzzyMatching bool                 `json:"disable_fuzzy_matching"` // Explicitly disable fuzzy matching
+	DisableWordMatching  bool                 `json:"disable_word_matching"`  // Explicitly disable word matching
+	DisableNormalization bool                 `json:"disable_normalization"`  // Explicitly disable normalization
+	FuzzyThreshold       float64              `json:"fuzzy_threshold"`        // Similarity threshold (0.0-1.0, default 0.85)
+	Sensitivity          DetectionSensitivity `json:"sensitivity"`            // low, medium, high, paranoid
+	WhitelistedPhrases   []string             `json:"whitelisted_phrases"`    // Phrases to exclude from detection
 }
 
 // MLDetectionConfig for ML-based injection detection

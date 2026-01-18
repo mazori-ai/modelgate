@@ -177,4 +177,3 @@ type ErrorDetail struct {
 	Code    string `json:"code,omitempty"`
 	Param   string `json:"param,omitempty"`
 }
-

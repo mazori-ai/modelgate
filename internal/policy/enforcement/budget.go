@@ -37,11 +37,11 @@ type AlertState struct {
 
 // BudgetViolation represents a budget violation
 type BudgetViolation struct {
-	Type         string  // daily, weekly, monthly, per_request
-	Limit        float64
-	Current      float64
-	Exceeded     bool
-	AlertLevel   string // warning, critical, exceeded
+	Type       string // daily, weekly, monthly, per_request
+	Limit      float64
+	Current    float64
+	Exceeded   bool
+	AlertLevel string // warning, critical, exceeded
 }
 
 // NewBudgetEnforcer creates a new budget enforcer
@@ -94,7 +94,7 @@ func (e *BudgetEnforcer) CheckBudget(ctx context.Context, policy domain.BudgetPo
 			}
 			return violation, e.handleExceeded(policy, tenantID, roleID, violation)
 		}
-		
+
 		// Check thresholds
 		if ratio := newDaily / policy.DailyLimitUSD; ratio >= policy.CriticalThreshold {
 			e.sendAlert(tenantID, roleID, "critical", "daily", policy)
@@ -131,7 +131,7 @@ func (e *BudgetEnforcer) CheckBudget(ctx context.Context, policy domain.BudgetPo
 			}
 			return violation, e.handleExceeded(policy, tenantID, roleID, violation)
 		}
-		
+
 		// Check thresholds
 		if ratio := newMonthly / policy.MonthlyLimitUSD; ratio >= policy.CriticalThreshold {
 			e.sendAlert(tenantID, roleID, "critical", "monthly", policy)
@@ -324,4 +324,3 @@ func startOfWeek(t time.Time) time.Time {
 func startOfMonth(t time.Time) time.Time {
 	return time.Date(t.Year(), t.Month(), 1, 0, 0, 0, 0, t.Location())
 }
-

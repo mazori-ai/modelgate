@@ -97,9 +97,9 @@ func inputToMCPAuthConfig(input *model.MCPAuthConfigInput) domain.MCPAuthConfig 
 
 func domainToMCPServerModel(s *domain.MCPServer) *model.MCPServer {
 	return &model.MCPServer{
-		ID:          s.ID,
-		Name:        s.Name,
-		Description: &s.Description,
+		ID:                  s.ID,
+		Name:                s.Name,
+		Description:         &s.Description,
 		ServerType:          model.MCPServerType(s.ServerType),
 		Endpoint:            s.Endpoint,
 		AuthType:            model.MCPAuthType(s.AuthType),

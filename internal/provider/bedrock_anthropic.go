@@ -52,7 +52,7 @@ type anthropicMsgContent struct {
 // MarshalJSON customizes JSON marshaling to ensure tool_use always has input field
 func (c anthropicMsgContent) MarshalJSON() ([]byte, error) {
 	type Alias anthropicMsgContent
-	
+
 	// For tool_use type, ensure input is always present (even if empty)
 	if c.Type == "tool_use" {
 		// Create a map with all fields, including input
@@ -68,7 +68,7 @@ func (c anthropicMsgContent) MarshalJSON() ([]byte, error) {
 		}
 		return json.Marshal(m)
 	}
-	
+
 	// For other types, use default marshaling
 	return json.Marshal(Alias(c))
 }
@@ -315,7 +315,7 @@ func (c *BedrockClient) anthropicSimulatedStream(ctx context.Context, req *domai
 				})
 			}
 		}
-		
+
 		// Emit tool call events
 		for _, tc := range toolCalls {
 			eventChan <- domain.ToolCallEvent{ToolCall: tc}
@@ -368,7 +368,7 @@ func (c *BedrockClient) buildAnthropicRequest(req *domain.ChatRequest) anthropic
 			Role:    msg.Role,
 			Content: []anthropicMsgContent{},
 		}
-		
+
 		// Handle text content (only if non-empty)
 		for _, content := range msg.Content {
 			if (content.Type == "text" || content.Type == "") && content.Text != "" {
@@ -378,7 +378,7 @@ func (c *BedrockClient) buildAnthropicRequest(req *domain.ChatRequest) anthropic
 				})
 			}
 		}
-		
+
 		// Handle tool calls from assistant messages
 		if msg.Role == "assistant" && len(msg.ToolCalls) > 0 {
 			for _, tc := range msg.ToolCalls {
@@ -395,7 +395,7 @@ func (c *BedrockClient) buildAnthropicRequest(req *domain.ChatRequest) anthropic
 				})
 			}
 		}
-		
+
 		// Handle tool results
 		if msg.Role == "tool" && msg.ToolCallID != "" {
 			// Get result text
@@ -418,7 +418,7 @@ func (c *BedrockClient) buildAnthropicRequest(req *domain.ChatRequest) anthropic
 				},
 			}
 		}
-		
+
 		if len(aMsg.Content) > 0 {
 			anthropicReq.Messages = append(anthropicReq.Messages, aMsg)
 		}
@@ -498,7 +498,7 @@ func (c *BedrockClient) anthropicComplete(ctx context.Context, req *domain.ChatR
 	// Process response content - handle both text and tool_use
 	var textContent strings.Builder
 	var toolCalls []domain.ToolCall
-	
+
 	for _, content := range anthropicResp.Content {
 		switch content.Type {
 		case "text":
@@ -514,7 +514,7 @@ func (c *BedrockClient) anthropicComplete(ctx context.Context, req *domain.ChatR
 			})
 		}
 	}
-	
+
 	response.Content = textContent.String()
 	response.ToolCalls = toolCalls
 

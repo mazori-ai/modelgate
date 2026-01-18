@@ -18,7 +18,7 @@ type ModelCacheable interface {
 	// SetModelCache sets the model cache for this provider
 	// The cache maps short model names to full native model IDs
 	SetModelCache(cache map[string]string)
-	
+
 	// GetModelCache returns the current model cache
 	GetModelCache() map[string]string
 }
@@ -27,7 +27,7 @@ type ModelCacheable interface {
 // It loads models from the database and populates provider caches to reduce latency
 type ModelCacheService struct {
 	mu sync.RWMutex
-	
+
 	// caches maps tenant_id -> provider -> model_id -> native_model_id
 	caches map[string]map[domain.Provider]map[string]string
 }
@@ -282,4 +282,3 @@ func (s *ModelCacheService) RefreshFromModels(tenantID string, provider domain.P
 		"provider", provider,
 		"model_count", len(cache))
 }
-

@@ -145,16 +145,16 @@ func (s *Server) handleListAgents(w http.ResponseWriter, r *http.Request, auth *
 
 	// Filter out sensitive information and format response
 	type AgentInfo struct {
-		ID         string    `json:"id"`
-		Name       string    `json:"name"`
-		KeyPrefix  string    `json:"key_prefix"`
-		RoleID     string    `json:"role_id,omitempty"`
-		RoleName   string    `json:"role_name,omitempty"`
-		GroupID    string    `json:"group_id,omitempty"`
-		GroupName  string    `json:"group_name,omitempty"`
-		CreatedAt  time.Time `json:"created_at"`
+		ID         string     `json:"id"`
+		Name       string     `json:"name"`
+		KeyPrefix  string     `json:"key_prefix"`
+		RoleID     string     `json:"role_id,omitempty"`
+		RoleName   string     `json:"role_name,omitempty"`
+		GroupID    string     `json:"group_id,omitempty"`
+		GroupName  string     `json:"group_name,omitempty"`
+		CreatedAt  time.Time  `json:"created_at"`
 		LastUsedAt *time.Time `json:"last_used_at,omitempty"`
-		Revoked    bool      `json:"revoked"`
+		Revoked    bool       `json:"revoked"`
 	}
 
 	agents := make([]AgentInfo, 0, len(apiKeys))

@@ -14,51 +14,51 @@ import (
 // Metrics holds all Prometheus metrics for ModelGate
 type Metrics struct {
 	// Request metrics
-	RequestsTotal      *prometheus.CounterVec
-	RequestDuration    *prometheus.HistogramVec
-	RequestsInFlight   prometheus.Gauge
-	
+	RequestsTotal    *prometheus.CounterVec
+	RequestDuration  *prometheus.HistogramVec
+	RequestsInFlight prometheus.Gauge
+
 	// Token metrics
-	TokensInput        *prometheus.CounterVec
-	TokensOutput       *prometheus.CounterVec
-	TokensThinking     *prometheus.CounterVec
-	
+	TokensInput    *prometheus.CounterVec
+	TokensOutput   *prometheus.CounterVec
+	TokensThinking *prometheus.CounterVec
+
 	// Cost metrics
-	CostUSD            *prometheus.CounterVec
-	
+	CostUSD *prometheus.CounterVec
+
 	// Provider metrics
-	ProviderRequests   *prometheus.CounterVec
-	ProviderErrors     *prometheus.CounterVec
-	ProviderLatency    *prometheus.HistogramVec
-	
+	ProviderRequests *prometheus.CounterVec
+	ProviderErrors   *prometheus.CounterVec
+	ProviderLatency  *prometheus.HistogramVec
+
 	// Tool metrics
-	ToolCalls          *prometheus.CounterVec
-	ToolErrors         *prometheus.CounterVec
-	
+	ToolCalls  *prometheus.CounterVec
+	ToolErrors *prometheus.CounterVec
+
 	// Policy metrics
-	PolicyEvaluations  *prometheus.CounterVec
-	PolicyViolations   *prometheus.CounterVec
-	
+	PolicyEvaluations *prometheus.CounterVec
+	PolicyViolations  *prometheus.CounterVec
+
 	// Tenant metrics
-	ActiveTenants      prometheus.Gauge
-	TenantRequests     *prometheus.CounterVec
-	TenantTokens       *prometheus.CounterVec
-	TenantCost         *prometheus.CounterVec
-	
+	ActiveTenants  prometheus.Gauge
+	TenantRequests *prometheus.CounterVec
+	TenantTokens   *prometheus.CounterVec
+	TenantCost     *prometheus.CounterVec
+
 	// Prompt safety metrics
-	PromptAnalysis     *prometheus.CounterVec
-	OutlierDetections  *prometheus.CounterVec
-	
+	PromptAnalysis    *prometheus.CounterVec
+	OutlierDetections *prometheus.CounterVec
+
 	// System metrics
-	StreamConnections  prometheus.Gauge
+	StreamConnections prometheus.Gauge
 
 	// NEW: Semantic Cache Metrics
-	CacheHits          *prometheus.CounterVec // Cache hits by model, tenant
-	CacheMisses        *prometheus.CounterVec // Cache misses by model, tenant
-	CacheTokensSaved   *prometheus.CounterVec // Tokens saved via cache
-	CacheCostSaved     *prometheus.CounterVec // Cost saved via cache (USD)
-	CacheEntries       *prometheus.GaugeVec   // Number of cache entries per tenant
-	CacheLatency       *prometheus.HistogramVec // Cache lookup latency
+	CacheHits        *prometheus.CounterVec   // Cache hits by model, tenant
+	CacheMisses      *prometheus.CounterVec   // Cache misses by model, tenant
+	CacheTokensSaved *prometheus.CounterVec   // Tokens saved via cache
+	CacheCostSaved   *prometheus.CounterVec   // Cost saved via cache (USD)
+	CacheEntries     *prometheus.GaugeVec     // Number of cache entries per tenant
+	CacheLatency     *prometheus.HistogramVec // Cache lookup latency
 
 	// NEW: Routing Metrics
 	RoutingDecisions   *prometheus.CounterVec // Routing decisions by strategy
@@ -66,20 +66,20 @@ type Metrics struct {
 	RoutingFailures    *prometheus.CounterVec // Routing failures by reason
 
 	// NEW: Resilience Metrics
-	CircuitBreakerState *prometheus.GaugeVec  // Circuit breaker state (0=closed, 1=half-open, 2=open)
+	CircuitBreakerState *prometheus.GaugeVec   // Circuit breaker state (0=closed, 1=half-open, 2=open)
 	RetryAttempts       *prometheus.CounterVec // Retry attempts by provider
 	FallbackInvocations *prometheus.CounterVec // Fallback chain invocations
 	FallbackSuccess     *prometheus.CounterVec // Successful fallback executions
 
 	// NEW: Health Tracking Metrics
-	ProviderHealth      *prometheus.GaugeVec   // Provider health score (0-1)
-	ProviderSuccessRate *prometheus.GaugeVec   // Provider success rate
-	ProviderP95Latency  *prometheus.GaugeVec   // Provider P95 latency
+	ProviderHealth      *prometheus.GaugeVec // Provider health score (0-1)
+	ProviderSuccessRate *prometheus.GaugeVec // Provider success rate
+	ProviderP95Latency  *prometheus.GaugeVec // Provider P95 latency
 
 	// NEW: Multi-Key Metrics
-	APIKeyUsage         *prometheus.CounterVec // API key usage by provider
-	APIKeyHealth        *prometheus.GaugeVec   // API key health score
-	APIKeyRateLimits    *prometheus.CounterVec // Rate limit hits by key
+	APIKeyUsage      *prometheus.CounterVec // API key usage by provider
+	APIKeyHealth     *prometheus.GaugeVec   // API key health score
+	APIKeyRateLimits *prometheus.CounterVec // Rate limit hits by key
 }
 
 // NewMetrics creates and registers all metrics
@@ -98,7 +98,7 @@ func NewMetrics(registry prometheus.Registerer) *Metrics {
 			},
 			[]string{"method", "model", "status", "tenant_id"},
 		),
-		
+
 		RequestDuration: factory.NewHistogramVec(
 			prometheus.HistogramOpts{
 				Name:    "modelgate_request_duration_seconds",
@@ -107,14 +107,14 @@ func NewMetrics(registry prometheus.Registerer) *Metrics {
 			},
 			[]string{"method", "model", "tenant_id"},
 		),
-		
+
 		RequestsInFlight: factory.NewGauge(
 			prometheus.GaugeOpts{
 				Name: "modelgate_requests_in_flight",
 				Help: "Number of requests currently being processed",
 			},
 		),
-		
+
 		TokensInput: factory.NewCounterVec(
 			prometheus.CounterOpts{
 				Name: "modelgate_tokens_input_total",
@@ -122,7 +122,7 @@ func NewMetrics(registry prometheus.Registerer) *Metrics {
 			},
 			[]string{"model", "provider", "tenant_id"},
 		),
-		
+
 		TokensOutput: factory.NewCounterVec(
 			prometheus.CounterOpts{
 				Name: "modelgate_tokens_output_total",
@@ -130,7 +130,7 @@ func NewMetrics(registry prometheus.Registerer) *Metrics {
 			},
 			[]string{"model", "provider", "tenant_id"},
 		),
-		
+
 		TokensThinking: factory.NewCounterVec(
 			prometheus.CounterOpts{
 				Name: "modelgate_tokens_thinking_total",
@@ -138,7 +138,7 @@ func NewMetrics(registry prometheus.Registerer) *Metrics {
 			},
 			[]string{"model", "provider", "tenant_id"},
 		),
-		
+
 		CostUSD: factory.NewCounterVec(
 			prometheus.CounterOpts{
 				Name: "modelgate_cost_usd_total",
@@ -146,7 +146,7 @@ func NewMetrics(registry prometheus.Registerer) *Metrics {
 			},
 			[]string{"model", "provider", "tenant_id"},
 		),
-		
+
 		ProviderRequests: factory.NewCounterVec(
 			prometheus.CounterOpts{
 				Name: "modelgate_provider_requests_total",
@@ -154,7 +154,7 @@ func NewMetrics(registry prometheus.Registerer) *Metrics {
 			},
 			[]string{"provider", "model"},
 		),
-		
+
 		ProviderErrors: factory.NewCounterVec(
 			prometheus.CounterOpts{
 				Name: "modelgate_provider_errors_total",
@@ -162,7 +162,7 @@ func NewMetrics(registry prometheus.Registerer) *Metrics {
 			},
 			[]string{"provider", "error_type"},
 		),
-		
+
 		ProviderLatency: factory.NewHistogramVec(
 			prometheus.HistogramOpts{
 				Name:    "modelgate_provider_latency_seconds",
@@ -171,7 +171,7 @@ func NewMetrics(registry prometheus.Registerer) *Metrics {
 			},
 			[]string{"provider", "model"},
 		),
-		
+
 		ToolCalls: factory.NewCounterVec(
 			prometheus.CounterOpts{
 				Name: "modelgate_tool_calls_total",
@@ -179,7 +179,7 @@ func NewMetrics(registry prometheus.Registerer) *Metrics {
 			},
 			[]string{"tool_name", "model", "tenant_id"},
 		),
-		
+
 		ToolErrors: factory.NewCounterVec(
 			prometheus.CounterOpts{
 				Name: "modelgate_tool_errors_total",
@@ -187,7 +187,7 @@ func NewMetrics(registry prometheus.Registerer) *Metrics {
 			},
 			[]string{"tool_name", "error_type"},
 		),
-		
+
 		PolicyEvaluations: factory.NewCounterVec(
 			prometheus.CounterOpts{
 				Name: "modelgate_policy_evaluations_total",
@@ -195,7 +195,7 @@ func NewMetrics(registry prometheus.Registerer) *Metrics {
 			},
 			[]string{"policy_type", "result"},
 		),
-		
+
 		PolicyViolations: factory.NewCounterVec(
 			prometheus.CounterOpts{
 				Name: "modelgate_policy_violations_total",
@@ -203,14 +203,14 @@ func NewMetrics(registry prometheus.Registerer) *Metrics {
 			},
 			[]string{"policy_id", "violation_type", "severity"},
 		),
-		
+
 		ActiveTenants: factory.NewGauge(
 			prometheus.GaugeOpts{
 				Name: "modelgate_active_tenants",
 				Help: "Number of active tenants",
 			},
 		),
-		
+
 		TenantRequests: factory.NewCounterVec(
 			prometheus.CounterOpts{
 				Name: "modelgate_tenant_requests_total",
@@ -218,7 +218,7 @@ func NewMetrics(registry prometheus.Registerer) *Metrics {
 			},
 			[]string{"tenant_id", "tier"},
 		),
-		
+
 		TenantTokens: factory.NewCounterVec(
 			prometheus.CounterOpts{
 				Name: "modelgate_tenant_tokens_total",
@@ -226,7 +226,7 @@ func NewMetrics(registry prometheus.Registerer) *Metrics {
 			},
 			[]string{"tenant_id", "tier", "type"},
 		),
-		
+
 		TenantCost: factory.NewCounterVec(
 			prometheus.CounterOpts{
 				Name: "modelgate_tenant_cost_usd_total",
@@ -234,7 +234,7 @@ func NewMetrics(registry prometheus.Registerer) *Metrics {
 			},
 			[]string{"tenant_id", "tier"},
 		),
-		
+
 		PromptAnalysis: factory.NewCounterVec(
 			prometheus.CounterOpts{
 				Name: "modelgate_prompt_analysis_total",
@@ -242,7 +242,7 @@ func NewMetrics(registry prometheus.Registerer) *Metrics {
 			},
 			[]string{"risk_level", "tenant_id"},
 		),
-		
+
 		OutlierDetections: factory.NewCounterVec(
 			prometheus.CounterOpts{
 				Name: "modelgate_outlier_detections_total",
@@ -250,7 +250,7 @@ func NewMetrics(registry prometheus.Registerer) *Metrics {
 			},
 			[]string{"outlier_type", "tenant_id"},
 		),
-		
+
 		StreamConnections: factory.NewGauge(
 			prometheus.GaugeOpts{
 				Name: "modelgate_stream_connections",
@@ -449,15 +449,15 @@ func (m *Metrics) NewRequestRecorder(method, model, tenantID, provider string) *
 // RecordSuccess records a successful request
 func (r *RequestRecorder) RecordSuccess(inputTokens, outputTokens int64, costUSD float64) {
 	duration := time.Since(r.startTime).Seconds()
-	
+
 	r.metrics.RequestsInFlight.Dec()
 	r.metrics.RequestsTotal.WithLabelValues(r.method, r.model, "success", r.tenantID).Inc()
 	r.metrics.RequestDuration.WithLabelValues(r.method, r.model, r.tenantID).Observe(duration)
-	
+
 	r.metrics.TokensInput.WithLabelValues(r.model, r.provider, r.tenantID).Add(float64(inputTokens))
 	r.metrics.TokensOutput.WithLabelValues(r.model, r.provider, r.tenantID).Add(float64(outputTokens))
 	r.metrics.CostUSD.WithLabelValues(r.model, r.provider, r.tenantID).Add(costUSD)
-	
+
 	r.metrics.ProviderRequests.WithLabelValues(r.provider, r.model).Inc()
 	r.metrics.ProviderLatency.WithLabelValues(r.provider, r.model).Observe(duration)
 }
@@ -465,11 +465,11 @@ func (r *RequestRecorder) RecordSuccess(inputTokens, outputTokens int64, costUSD
 // RecordError records a failed request
 func (r *RequestRecorder) RecordError(errorType string) {
 	duration := time.Since(r.startTime).Seconds()
-	
+
 	r.metrics.RequestsInFlight.Dec()
 	r.metrics.RequestsTotal.WithLabelValues(r.method, r.model, "error", r.tenantID).Inc()
 	r.metrics.RequestDuration.WithLabelValues(r.method, r.model, r.tenantID).Observe(duration)
-	
+
 	r.metrics.ProviderErrors.WithLabelValues(r.provider, errorType).Inc()
 }
 
@@ -647,4 +647,3 @@ func (m *Metrics) UpdateAPIKeyHealth(provider, keyName, tenantID string, healthS
 func (m *Metrics) RecordAPIKeyRateLimit(provider, keyName, tenantID string) {
 	m.APIKeyRateLimits.WithLabelValues(provider, keyName, tenantID).Inc()
 }
-

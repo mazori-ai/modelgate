@@ -339,4 +339,3 @@ func (c *BedrockClient) mistralComplete(ctx context.Context, req *domain.ChatReq
 
 	return response, nil
 }
-

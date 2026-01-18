@@ -105,7 +105,7 @@ func ExtractRequestInfo(r *http.Request) (ipAddress, userAgent string) {
 	if r == nil {
 		return "", ""
 	}
-	
+
 	// Try X-Forwarded-For first for proxied requests
 	ipAddress = r.Header.Get("X-Forwarded-For")
 	if ipAddress == "" {
@@ -114,7 +114,7 @@ func ExtractRequestInfo(r *http.Request) (ipAddress, userAgent string) {
 	if ipAddress == "" {
 		ipAddress = r.RemoteAddr
 	}
-	
+
 	userAgent = r.Header.Get("User-Agent")
 	return
 }
@@ -164,4 +164,3 @@ func GetUserAgentFromContext(ctx context.Context) string {
 	}
 	return ""
 }
-

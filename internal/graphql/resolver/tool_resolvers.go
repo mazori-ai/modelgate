@@ -21,7 +21,7 @@ func getActorInfoFromContext(ctx context.Context) (string, string, string) {
 	if user, ok := ctx.Value(ContextKeyUser).(*domain.User); ok && user != nil {
 		return user.ID, user.Email, "user"
 	}
-	
+
 	// Fallback: check if we have user ID and email set separately (from tenant user auth)
 	userID := GetUserFromContext(ctx)
 	userEmail := GetUserEmailFromContext(ctx)
@@ -32,7 +32,7 @@ func getActorInfoFromContext(ctx context.Context) (string, string, string) {
 		}
 		return userID, userEmail, actorType
 	}
-	
+
 	// Return empty if no user found
 	return "", "", ""
 }

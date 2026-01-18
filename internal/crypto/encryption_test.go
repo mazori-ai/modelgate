@@ -18,7 +18,7 @@ func TestEncryptionService(t *testing.T) {
 
 	t.Run("encrypt and decrypt string", func(t *testing.T) {
 		plaintext := "sk-test-api-key-12345"
-		
+
 		ciphertext, err := svc.Encrypt(plaintext)
 		if err != nil {
 			t.Fatalf("Encrypt failed: %v", err)
@@ -60,7 +60,7 @@ func TestEncryptionService(t *testing.T) {
 
 	t.Run("different encryptions produce different ciphertexts", func(t *testing.T) {
 		plaintext := "test-data"
-		
+
 		ciphertext1, _ := svc.Encrypt(plaintext)
 		ciphertext2, _ := svc.Encrypt(plaintext)
 
@@ -269,4 +269,3 @@ func BenchmarkDecrypt(b *testing.B) {
 		_, _ = svc.Decrypt(ciphertext)
 	}
 }
-

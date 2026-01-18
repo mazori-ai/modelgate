@@ -336,4 +336,3 @@ func (c *BedrockClient) metaComplete(ctx context.Context, req *domain.ChatReques
 
 	return response, nil
 }
-

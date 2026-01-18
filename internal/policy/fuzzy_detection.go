@@ -729,4 +729,3 @@ func BenchmarkDetection(content string, config domain.PatternDetectionConfig) (r
 	result = DetectPromptInjectionFuzzy(content, config)
 	return result, 0
 }
-

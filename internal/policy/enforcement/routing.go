@@ -145,7 +145,7 @@ func (e *RoutingEnforcer) routeByWeight(ctx context.Context, policy domain.Routi
 	// Random selection based on weight
 	r := rand.Intn(totalWeight)
 	cumulative := 0
-	
+
 	for provider, weight := range policy.WeightedConfig.Weights {
 		cumulative += weight
 		if r < cumulative {
@@ -195,14 +195,14 @@ func (e *RoutingEnforcer) estimateComplexity(req *domain.ChatRequest) float64 {
 	// - Longer prompts = more complex
 	// - More messages = more complex
 	// - Tool usage = more complex
-	
+
 	totalLen := 0
 	for _, msg := range req.Messages {
 		totalLen += len(msg.Content)
 	}
 
 	complexity := 0.0
-	
+
 	// Length factor (0-0.4)
 	if totalLen > 5000 {
 		complexity += 0.4
@@ -230,7 +230,7 @@ func (e *RoutingEnforcer) estimateComplexity(req *domain.ChatRequest) float64 {
 func (e *RoutingEnforcer) detectTaskType(req *domain.ChatRequest) string {
 	// Simple keyword-based detection
 	// In production, use ML classifier
-	
+
 	if len(req.Messages) == 0 {
 		return "general"
 	}
@@ -283,7 +283,7 @@ func (e *RoutingEnforcer) RecordLatency(provider, model string, latencyMs float6
 	defer e.mu.Unlock()
 
 	key := provider + ":" + model
-	
+
 	if metrics, ok := e.latencyMetrics[key]; ok {
 		// Running average
 		metrics.AvgLatencyMs = (metrics.AvgLatencyMs*float64(metrics.RequestCount) + latencyMs) / float64(metrics.RequestCount+1)
@@ -297,4 +297,3 @@ func (e *RoutingEnforcer) RecordLatency(provider, model string, latencyMs float6
 		}
 	}
 }
-

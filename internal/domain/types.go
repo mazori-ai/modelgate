@@ -300,9 +300,9 @@ type ChatResponse struct {
 	FinishReason FinishReason `json:"finish_reason,omitempty"`
 	Thinking     string       `json:"thinking,omitempty"`
 	CostUSD      float64      `json:"cost_usd,omitempty"`
-	Cached       bool         `json:"cached,omitempty"`       // True if response was served from cache
-	LatencyMs    int64        `json:"latency_ms,omitempty"`   // Request latency in milliseconds
-	Provider     Provider     `json:"provider,omitempty"`     // Provider that served the response
+	Cached       bool         `json:"cached,omitempty"`     // True if response was served from cache
+	LatencyMs    int64        `json:"latency_ms,omitempty"` // Request latency in milliseconds
+	Provider     Provider     `json:"provider,omitempty"`   // Provider that served the response
 }
 
 // =============================================================================

@@ -11,9 +11,9 @@ import (
 
 // AgentDashboardStats contains comprehensive agent statistics
 type AgentDashboardStats struct {
-	APIKeyID   string `json:"api_key_id"`
-	APIKeyName string `json:"api_key_name"`
-	TimeRange  TimeRange             `json:"time_range"`
+	APIKeyID   string    `json:"api_key_id"`
+	APIKeyName string    `json:"api_key_name"`
+	TimeRange  TimeRange `json:"time_range"`
 
 	// Provider and Model Usage
 	ProviderUsage []ProviderModelUsage `json:"provider_usage"`
@@ -51,11 +51,11 @@ type ProviderModelUsage struct {
 
 // TokenMetrics contains token usage metrics
 type TokenMetrics struct {
-	TotalInput    int64                      `json:"total_input"`
-	TotalOutput   int64                      `json:"total_output"`
-	TotalThinking int64                      `json:"total_thinking"`
-	TotalCost     float64                    `json:"total_cost_usd"`
-	ByModel       map[string]TokenBreakdown  `json:"by_model"`
+	TotalInput    int64                     `json:"total_input"`
+	TotalOutput   int64                     `json:"total_output"`
+	TotalThinking int64                     `json:"total_thinking"`
+	TotalCost     float64                   `json:"total_cost_usd"`
+	ByModel       map[string]TokenBreakdown `json:"by_model"`
 }
 
 // TokenBreakdown contains token breakdown for a specific model
@@ -70,33 +70,33 @@ type TokenBreakdown struct {
 type CacheStatistics struct {
 	TotalHits    int64   `json:"total_hits"`
 	TotalMisses  int64   `json:"total_misses"`
-	HitRate      float64 `json:"hit_rate"`      // Percentage (0-100)
+	HitRate      float64 `json:"hit_rate"` // Percentage (0-100)
 	TokensSaved  int64   `json:"tokens_saved"`
 	CostSavedUSD float64 `json:"cost_saved_usd"`
 }
 
 // ToolCallStatistic contains statistics for a specific tool
 type ToolCallStatistic struct {
-	ToolName     string `json:"tool_name"`
-	SuccessCount int64  `json:"success_count"`
-	FailureCount int64  `json:"failure_count"`
-	TotalCount   int64  `json:"total_count"`
+	ToolName     string  `json:"tool_name"`
+	SuccessCount int64   `json:"success_count"`
+	FailureCount int64   `json:"failure_count"`
+	TotalCount   int64   `json:"total_count"`
 	SuccessRate  float64 `json:"success_rate"` // Percentage (0-100)
 }
 
 // PolicyViolationStat contains statistics for policy violations by type
 type PolicyViolationStat struct {
-	ViolationType string `json:"violation_type"`
-	Count         int64  `json:"count"`
+	ViolationType string  `json:"violation_type"`
+	Count         int64   `json:"count"`
 	AvgSeverity   float64 `json:"avg_severity"` // Average severity (1-5)
 }
 
 // RiskAssessment contains risk assessment information
 type RiskAssessment struct {
-	Score       float64            `json:"score"`           // 0-100
-	Level       string             `json:"level"`           // low, medium, high, critical
-	Violations  int64              `json:"total_violations"`
-	Details     map[string]float64 `json:"details"`         // breakdown by violation type
+	Score      float64            `json:"score"` // 0-100
+	Level      string             `json:"level"` // low, medium, high, critical
+	Violations int64              `json:"total_violations"`
+	Details    map[string]float64 `json:"details"` // breakdown by violation type
 }
 
 // =============================================================================

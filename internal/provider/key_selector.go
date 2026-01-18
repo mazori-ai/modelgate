@@ -29,31 +29,31 @@ const (
 
 // ProviderAPIKey represents a single API key for a provider
 type ProviderAPIKey struct {
-	ID                  string
-	Provider            domain.Provider
+	ID       string
+	Provider domain.Provider
 
 	// Authentication credentials
-	APIKeyEncrypted            string // Encrypted API key (stored value)
-	APIKeyDecrypted            string // Decrypted API key (runtime value, never persisted)
-	AccessKeyIDEncrypted       string // Encrypted AWS Access Key ID (for Bedrock IAM auth)
-	AccessKeyIDDecrypted       string // Decrypted Access Key ID (runtime value)
-	SecretAccessKeyEncrypted   string // Encrypted AWS Secret Access Key (for Bedrock IAM auth)
-	SecretAccessKeyDecrypted   string // Decrypted Secret Access Key (runtime value)
-	CredentialType             string // 'api_key', 'iam_credentials', or 'both'
+	APIKeyEncrypted          string // Encrypted API key (stored value)
+	APIKeyDecrypted          string // Decrypted API key (runtime value, never persisted)
+	AccessKeyIDEncrypted     string // Encrypted AWS Access Key ID (for Bedrock IAM auth)
+	AccessKeyIDDecrypted     string // Decrypted Access Key ID (runtime value)
+	SecretAccessKeyEncrypted string // Encrypted AWS Secret Access Key (for Bedrock IAM auth)
+	SecretAccessKeyDecrypted string // Decrypted Secret Access Key (runtime value)
+	CredentialType           string // 'api_key', 'iam_credentials', or 'both'
 
-	KeyPrefix           string // First 12 characters for display (API key or Access Key)
-	Name                string
-	Priority            int
-	Enabled             bool
-	HealthScore         float64
-	SuccessCount        int
-	FailureCount        int
-	RateLimitRemaining  *int
-	RateLimitResetAt    *time.Time
-	RequestCount        int64
-	LastUsedAt          *time.Time
-	CreatedAt           time.Time
-	UpdatedAt           time.Time
+	KeyPrefix          string // First 12 characters for display (API key or Access Key)
+	Name               string
+	Priority           int
+	Enabled            bool
+	HealthScore        float64
+	SuccessCount       int
+	FailureCount       int
+	RateLimitRemaining *int
+	RateLimitResetAt   *time.Time
+	RequestCount       int64
+	LastUsedAt         *time.Time
+	CreatedAt          time.Time
+	UpdatedAt          time.Time
 }
 
 // TenantDBProvider is a function that returns the database for a given tenant slug

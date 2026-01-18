@@ -36,11 +36,11 @@ var DefaultProviders = []string{"openai", "anthropic", "gemini", "ollama"}
 
 // Router handles intelligent routing decisions
 type Router struct {
-	healthTracker  *health.Tracker
-	configSource   ProviderConfigSource
-	providerCache  map[string][]string // provider -> available models
-	mu             sync.RWMutex
-	roundRobinIdx  map[string]int // For round-robin strategy
+	healthTracker *health.Tracker
+	configSource  ProviderConfigSource
+	providerCache map[string][]string // provider -> available models
+	mu            sync.RWMutex
+	roundRobinIdx map[string]int // For round-robin strategy
 }
 
 // NewRouter creates a new router with default configuration

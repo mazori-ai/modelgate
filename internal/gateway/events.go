@@ -18,9 +18,9 @@ func (s *Service) recordPolicyViolationEvent(ctx context.Context, tenantID, apiK
 	// Persist to PostgreSQL
 	if s.pgStore != nil {
 		event := &domain.PolicyViolationRecord{
-			APIKeyID:   apiKeyID,
-			PolicyID:   policyID,
-			PolicyName: policyName,
+			APIKeyID:      apiKeyID,
+			PolicyID:      policyID,
+			PolicyName:    policyName,
 			ViolationType: violationType,
 			Severity:      severity,
 			Message:       message,
@@ -60,9 +60,9 @@ func (s *Service) recordToolCallEvent(ctx context.Context, tenantID, apiKeyID, t
 	}
 
 	event := &domain.ToolCallRecord{
-		APIKeyID: apiKeyID,
-		ToolName: toolName,
-		Model:    model,
+		APIKeyID:     apiKeyID,
+		ToolName:     toolName,
+		Model:        model,
 		Provider:     provider,
 		Success:      success,
 		ErrorMessage: errorMessage,
@@ -98,9 +98,9 @@ func (s *Service) recordCacheHitEvent(ctx context.Context, tenantID, apiKeyID, m
 	// Persist to PostgreSQL
 	if s.pgStore != nil {
 		event := &domain.CacheEventRecord{
-			APIKeyID: apiKeyID,
-			Model:    model,
-			Hit:      true,
+			APIKeyID:     apiKeyID,
+			Model:        model,
+			Hit:          true,
 			TokensSaved:  tokensSaved,
 			CostSavedUSD: costSaved,
 		}

@@ -580,4 +580,3 @@ func (s *MemoryStore) RUnlock() {
 func (s *MemoryStore) Usage() []*domain.UsageRecord {
 	return s.usage
 }
-

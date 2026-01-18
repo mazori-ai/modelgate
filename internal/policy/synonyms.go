@@ -200,8 +200,9 @@ func GetCanonical(word string) string {
 
 // ExpandPatternWithSynonyms generates all synonym variations of a pattern
 // Example: "ignore previous instructions" →
-//   ["ignore previous instructions", "discard previous instructions",
-//    "skip previous instructions", "ignore prior instructions", ...]
+//
+//	["ignore previous instructions", "discard previous instructions",
+//	 "skip previous instructions", "ignore prior instructions", ...]
 //
 // To prevent combinatorial explosion, we limit expansion:
 // - Only expand words that have synonyms
@@ -394,4 +395,3 @@ func GetExpandedEncodingEvasionPatterns() PatternCategory {
 	base := GetEncodingEvasionPatterns()
 	return ExpandPatternCategory(base, 20)
 }
-

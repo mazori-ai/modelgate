@@ -75,4 +75,3 @@ func (r *SSEReader) ReadEvent() (*SSEEvent, error) {
 		}
 	}
 }
-

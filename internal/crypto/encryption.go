@@ -27,10 +27,10 @@ var (
 // EncryptionService handles encryption and decryption of sensitive data
 // Uses AES-GCM for authenticated encryption
 type EncryptionService struct {
-	key    []byte
-	gcm    cipher.AEAD
-	mu     sync.RWMutex
-	keyID  string // Identifier for key rotation tracking
+	key   []byte
+	gcm   cipher.AEAD
+	mu    sync.RWMutex
+	keyID string // Identifier for key rotation tracking
 }
 
 // NewEncryptionService creates a new encryption service with the given key
@@ -198,4 +198,3 @@ func GenerateKeyString(size int) (string, error) {
 	}
 	return base64.StdEncoding.EncodeToString(key), nil
 }
-

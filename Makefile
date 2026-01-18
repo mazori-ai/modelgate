@@ -6,7 +6,7 @@
 .PHONY: all build modelgate graphql web web-build web-dev web-install web-logs \
         docker docker-build docker-run docker-stop docker-logs docker-restart \
         compose-up compose-down compose-logs compose-clean compose-rebuild \
-        run run-foreground run-all stop stop-all logs dev test lint fmt tidy clean setup tools help
+        run run-foreground run-all stop stop-all logs dev test lint fmt fmt-go tidy clean setup tools help
 
 # Variables
 BINARY_NAME := modelgate
@@ -53,11 +53,15 @@ build: modelgate
 # =============================================================================
 
 # Build the ModelGate binary
-modelgate:
+modelgate: fmt-go
 	@echo "🔨 Building $(BINARY_NAME)..."
 	@mkdir -p $(BUILD_DIR)
 	CGO_ENABLED=$(CGO_ENABLED) GOOS=$(GOOS) GOARCH=$(GOARCH) go build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME) ./$(CMD_DIR)
 	@echo "✅ Build complete: $(BUILD_DIR)/$(BINARY_NAME)"
+
+# Format Go code (runs before build)
+fmt-go:
+	@gofmt -w cmd/ internal/
 
 # Run the application (builds backend + web, runs in background)
 run: modelgate
@@ -390,11 +394,11 @@ lint:
 	@echo "🔍 Running linter..."
 	golangci-lint run ./...
 
-# Format code
+# Format code (Go + imports)
 fmt:
 	@echo "✨ Formatting code..."
-	go fmt ./...
-	goimports -w .
+	@gofmt -w cmd/ internal/
+	@goimports -w cmd/ internal/ 2>/dev/null || true
 
 # Tidy dependencies
 tidy:

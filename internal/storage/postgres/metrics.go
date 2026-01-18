@@ -264,4 +264,3 @@ func (s *TenantStore) GetProviderHealthMetrics(ctx context.Context) ([]ProviderH
 
 	return metrics, nil
 }
-

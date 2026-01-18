@@ -18,11 +18,11 @@ type Engine struct {
 	tenantRepo     domain.TenantRepository
 	rolePolicyRepo domain.RolePolicyRepository
 	groupRepo      domain.GroupRepository
-	
+
 	// Cached compiled patterns
 	patternCache map[string]*regexp.Regexp
 	cacheMu      sync.RWMutex
-	
+
 	// Configuration
 	config EngineConfig
 }
@@ -124,7 +124,7 @@ func (e *Engine) Evaluate(ctx context.Context, tenantID string, req *domain.Chat
 		if violated := e.evaluatePolicy(policy, tenant, req); violated != nil {
 			result.Violations = append(result.Violations, *violated)
 			result.MatchedPolicies = append(result.MatchedPolicies, policy.ID)
-			
+
 			if violated.Severity == "critical" {
 				result.Allowed = false
 			}
@@ -182,23 +182,23 @@ func (e *Engine) checkGroupPolicies(group *domain.Group, tenantID string, tenant
 			rolePolicies = append(rolePolicies, rp)
 		}
 	}
-	
+
 	if len(rolePolicies) == 0 {
 		return // No policies to check
 	}
-	
+
 	// Combine model restrictions - use MOST PERMISSIVE approach
 	modelAllowed := e.checkGroupModelRestrictions(rolePolicies, req, result)
 	if !modelAllowed {
 		result.Allowed = false
 	}
-	
+
 	// Combine provider restrictions - if ANY role allows the provider, it's allowed
 	e.checkGroupProviderRestrictions(rolePolicies, req, result)
-	
+
 	// Combine token limits - use the HIGHEST limit
 	e.checkGroupTokenLimits(rolePolicies, req, result)
-	
+
 	// Combine tool restrictions - if ANY role allows tools, they're allowed
 	e.checkGroupToolRestrictions(rolePolicies, req, result)
 }
@@ -207,16 +207,16 @@ func (e *Engine) checkGroupPolicies(group *domain.Group, tenantID string, tenant
 // Returns true if the model is allowed by ANY role
 func (e *Engine) checkGroupModelRestrictions(rolePolicies []*domain.RolePolicy, req *domain.ChatRequest, result *domain.PolicyEvaluationResult) bool {
 	modelAllowed := false
-	
+
 	for _, rolePolicy := range rolePolicies {
 		restrictions := rolePolicy.ModelRestriction
-		
+
 		// If no allowed models are configured, allow all
 		if len(restrictions.AllowedModels) == 0 {
 			modelAllowed = true
 			break
 		}
-		
+
 		// Check if model is in allowed list
 		for _, m := range restrictions.AllowedModels {
 			if matchesPattern(req.Model, m) {
@@ -224,12 +224,12 @@ func (e *Engine) checkGroupModelRestrictions(rolePolicies []*domain.RolePolicy, 
 				break
 			}
 		}
-		
+
 		if modelAllowed {
 			break // At least one role allows, so we're good
 		}
 	}
-	
+
 	if !modelAllowed {
 		result.Violations = append(result.Violations, domain.PolicyViolation{
 			PolicyID:      "group_policy",
@@ -239,7 +239,7 @@ func (e *Engine) checkGroupModelRestrictions(rolePolicies []*domain.RolePolicy, 
 			Severity:      "high",
 		})
 	}
-	
+
 	return modelAllowed
 }
 
@@ -247,14 +247,14 @@ func (e *Engine) checkGroupModelRestrictions(rolePolicies []*domain.RolePolicy, 
 func (e *Engine) checkGroupProviderRestrictions(rolePolicies []*domain.RolePolicy, req *domain.ChatRequest, result *domain.PolicyEvaluationResult) {
 	provider := e.extractProviderFromModel(req.Model)
 	providerAllowed := false
-	
+
 	for _, rolePolicy := range rolePolicies {
 		// If any role has no provider restrictions, allow all
 		if len(rolePolicy.ModelRestriction.AllowedProviders) == 0 {
 			providerAllowed = true
 			break
 		}
-		
+
 		// Check if provider is allowed
 		for _, p := range rolePolicy.ModelRestriction.AllowedProviders {
 			if p == provider {
@@ -262,12 +262,12 @@ func (e *Engine) checkGroupProviderRestrictions(rolePolicies []*domain.RolePolic
 				break
 			}
 		}
-		
+
 		if providerAllowed {
 			break
 		}
 	}
-	
+
 	if !providerAllowed {
 		result.Allowed = false
 		result.Violations = append(result.Violations, domain.PolicyViolation{
@@ -285,19 +285,19 @@ func (e *Engine) checkGroupTokenLimits(rolePolicies []*domain.RolePolicy, req *d
 	if req.MaxTokens == nil {
 		return
 	}
-	
+
 	var maxAllowed int32 = 0
 	for _, rolePolicy := range rolePolicies {
 		if rolePolicy.ModelRestriction.MaxTokensPerRequest > maxAllowed {
 			maxAllowed = rolePolicy.ModelRestriction.MaxTokensPerRequest
 		}
 	}
-	
+
 	// If any role has no limit (0), allow unlimited
 	if maxAllowed == 0 {
 		return
 	}
-	
+
 	if *req.MaxTokens > maxAllowed {
 		result.Allowed = false
 		result.Violations = append(result.Violations, domain.PolicyViolation{
@@ -315,7 +315,7 @@ func (e *Engine) checkGroupToolRestrictions(rolePolicies []*domain.RolePolicy, r
 	if len(req.Tools) == 0 {
 		return
 	}
-	
+
 	// Check if any role allows tool calling
 	toolCallingAllowed := false
 	for _, rolePolicy := range rolePolicies {
@@ -324,7 +324,7 @@ func (e *Engine) checkGroupToolRestrictions(rolePolicies []*domain.RolePolicy, r
 			break
 		}
 	}
-	
+
 	if !toolCallingAllowed {
 		result.Allowed = false
 		result.Violations = append(result.Violations, domain.PolicyViolation{
@@ -336,16 +336,16 @@ func (e *Engine) checkGroupToolRestrictions(rolePolicies []*domain.RolePolicy, r
 		})
 		return
 	}
-	
+
 	// Check individual tools - allowed if ANY role allows it
 	for _, tool := range req.Tools {
 		toolAllowed := false
-		
+
 		for _, rolePolicy := range rolePolicies {
 			if !rolePolicy.ToolPolicies.AllowToolCalling {
 				continue
 			}
-			
+
 			// Check if tool is in allowed list
 			for _, allowedTool := range rolePolicy.ToolPolicies.AllowedTools {
 				if matchesPattern(tool.Function.Name, allowedTool) {
@@ -353,12 +353,12 @@ func (e *Engine) checkGroupToolRestrictions(rolePolicies []*domain.RolePolicy, r
 					break
 				}
 			}
-			
+
 			if toolAllowed {
 				break
 			}
 		}
-		
+
 		if !toolAllowed {
 			result.Violations = append(result.Violations, domain.PolicyViolation{
 				PolicyID:      "group_policy",
@@ -375,7 +375,7 @@ func (e *Engine) checkGroupToolRestrictions(rolePolicies []*domain.RolePolicy, r
 func (e *Engine) checkRolePolicy(rolePolicy *domain.RolePolicy, tenant *domain.Tenant, req *domain.ChatRequest, result *domain.PolicyEvaluationResult) {
 	// Check model restrictions based on mode (whitelist or blacklist)
 	e.checkModelRestrictions(rolePolicy, req, result)
-	
+
 	// Check allowed providers
 	if len(rolePolicy.ModelRestriction.AllowedProviders) > 0 {
 		provider := e.extractProviderFromModel(req.Model)
@@ -630,7 +630,7 @@ func (e *Engine) getRequestResource(req *domain.ChatRequest) string {
 // evaluateCondition evaluates a policy condition
 func (e *Engine) evaluateCondition(condition domain.PolicyCondition, tenant *domain.Tenant, req *domain.ChatRequest) bool {
 	value := e.getConditionValue(condition.Key, tenant, req)
-	
+
 	switch condition.Operator {
 	case "StringEquals":
 		for _, v := range condition.Values {
@@ -639,7 +639,7 @@ func (e *Engine) evaluateCondition(condition domain.PolicyCondition, tenant *dom
 			}
 		}
 		return false
-		
+
 	case "StringNotEquals":
 		for _, v := range condition.Values {
 			if value == v {
@@ -647,7 +647,7 @@ func (e *Engine) evaluateCondition(condition domain.PolicyCondition, tenant *dom
 			}
 		}
 		return true
-		
+
 	case "StringLike":
 		for _, v := range condition.Values {
 			if matchesPattern(value, v) {
@@ -655,14 +655,14 @@ func (e *Engine) evaluateCondition(condition domain.PolicyCondition, tenant *dom
 			}
 		}
 		return false
-		
+
 	case "NumericLessThan":
 		// Implement numeric comparison
 		return true
-		
+
 	case "NumericGreaterThan":
 		return true
-		
+
 	default:
 		return true
 	}
@@ -845,7 +845,7 @@ func (e *Engine) detectOutliers(text string) domain.OutlierAnalysis {
 	if charCount > e.config.MaxPromptLength {
 		analysis.IsOutlier = true
 		analysis.AnomalyScore = 0.9
-		analysis.OutlierReasons = append(analysis.OutlierReasons, 
+		analysis.OutlierReasons = append(analysis.OutlierReasons,
 			fmt.Sprintf("Prompt length (%d) exceeds maximum (%d)", charCount, e.config.MaxPromptLength))
 		analysis.OutlierType = domain.OutlierTypeLength
 	}
@@ -988,12 +988,12 @@ func max(a, b float64) float64 {
 // checkModelRestrictions checks if the requested model is allowed based on role policy
 func (e *Engine) checkModelRestrictions(rolePolicy *domain.RolePolicy, req *domain.ChatRequest, result *domain.PolicyEvaluationResult) {
 	restrictions := rolePolicy.ModelRestriction
-	
+
 	// If no allowed models are configured, allow all models
 	if len(restrictions.AllowedModels) == 0 {
 		return
 	}
-	
+
 	// Check if model is in the allowed list
 	allowed := false
 	for _, m := range restrictions.AllowedModels {
@@ -1002,7 +1002,7 @@ func (e *Engine) checkModelRestrictions(rolePolicy *domain.RolePolicy, req *doma
 			break
 		}
 	}
-	
+
 	if !allowed {
 		result.Allowed = false
 		result.Violations = append(result.Violations, domain.PolicyViolation{
@@ -1019,7 +1019,7 @@ func (e *Engine) checkModelRestrictions(rolePolicy *domain.RolePolicy, req *doma
 // e.g., "azure/gpt-4o" -> ProviderAzureOpenAI, "openai/gpt-4" -> ProviderOpenAI
 func (e *Engine) extractProviderFromModel(model string) domain.Provider {
 	modelLower := strings.ToLower(model)
-	
+
 	// Check for provider prefixes first
 	if strings.HasPrefix(modelLower, "azure/") {
 		return domain.ProviderAzureOpenAI
@@ -1042,7 +1042,7 @@ func (e *Engine) extractProviderFromModel(model string) domain.Provider {
 	if strings.HasPrefix(modelLower, "ollama/") {
 		return domain.ProviderOllama
 	}
-	
+
 	// Infer from model name patterns
 	if strings.HasPrefix(modelLower, "gpt-") || strings.HasPrefix(modelLower, "o1") || strings.HasPrefix(modelLower, "text-embedding") {
 		return domain.ProviderOpenAI
@@ -1060,7 +1060,7 @@ func (e *Engine) extractProviderFromModel(model string) domain.Provider {
 		}
 		return domain.ProviderTogether // Default for open models
 	}
-	
+
 	return domain.ProviderOpenAI // Default fallback
 }
 
@@ -1069,21 +1069,21 @@ func (e *Engine) GetAllowedModelsForRole(ctx context.Context, tenantID, roleID s
 	if e.rolePolicyRepo == nil {
 		return availableModels, nil
 	}
-	
+
 	rolePolicy, err := e.rolePolicyRepo.Get(tenantID, roleID)
 	if err != nil {
 		return availableModels, nil // Return all if policy not found
 	}
-	
+
 	restrictions := rolePolicy.ModelRestriction
-	
+
 	// If no allowed models are configured, return all available models
 	if len(restrictions.AllowedModels) == 0 && len(restrictions.AllowedProviders) == 0 {
 		return availableModels, nil
 	}
-	
+
 	var filteredModels []domain.ModelInfo
-	
+
 	for _, model := range availableModels {
 		// Check provider restrictions first
 		if len(restrictions.AllowedProviders) > 0 {
@@ -1098,7 +1098,7 @@ func (e *Engine) GetAllowedModelsForRole(ctx context.Context, tenantID, roleID s
 				continue
 			}
 		}
-		
+
 		// Check allowed models list
 		if len(restrictions.AllowedModels) > 0 {
 			allowed := false
@@ -1112,10 +1112,9 @@ func (e *Engine) GetAllowedModelsForRole(ctx context.Context, tenantID, roleID s
 				continue
 			}
 		}
-		
+
 		filteredModels = append(filteredModels, model)
 	}
-	
+
 	return filteredModels, nil
 }
-

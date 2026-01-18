@@ -163,9 +163,9 @@ func (s *Server) setupRoutes() {
 func (s *Server) setupStaticFileServer() {
 	// Try multiple paths for static files
 	staticPaths := []string{
-		"/app/web/dist",  // Docker path
-		"./web/dist",     // Local development path
-		"../web/dist",    // Alternative local path
+		"/app/web/dist", // Docker path
+		"./web/dist",    // Local development path
+		"../web/dist",   // Alternative local path
 	}
 
 	var staticDir string
@@ -594,12 +594,12 @@ func (s *Server) enforceToolPolicy(ctx context.Context, req *domain.ChatRequest,
 
 				// Log execution attempt as REMOVED
 				tenantStore.LogToolExecution(ctx, &domain.ToolExecutionLog{
-					ID:        uuid.New().String(),
-					ToolID:    t.ToolID,
-					RoleID:    auth.APIKey.RoleID,
-					APIKeyID:  auth.APIKey.ID,
-					RequestID: req.RequestID,
-					ToolName:  t.ToolName,
+					ID:          uuid.New().String(),
+					ToolID:      t.ToolID,
+					RoleID:      auth.APIKey.RoleID,
+					APIKeyID:    auth.APIKey.ID,
+					RequestID:   req.RequestID,
+					ToolName:    t.ToolName,
 					Status:      "REMOVED",
 					BlockReason: t.Reason,
 					Model:       req.Model,
@@ -643,12 +643,12 @@ func (s *Server) enforceToolPolicy(ctx context.Context, req *domain.ChatRequest,
 
 				// Log execution attempt
 				tenantStore.LogToolExecution(ctx, &domain.ToolExecutionLog{
-					ID:        uuid.New().String(),
-					ToolID:    t.ToolID,
-					RoleID:    auth.APIKey.RoleID,
-					APIKeyID:  auth.APIKey.ID,
-					RequestID: req.RequestID,
-					ToolName:  t.ToolName,
+					ID:          uuid.New().String(),
+					ToolID:      t.ToolID,
+					RoleID:      auth.APIKey.RoleID,
+					APIKeyID:    auth.APIKey.ID,
+					RequestID:   req.RequestID,
+					ToolName:    t.ToolName,
 					Status:      "BLOCKED",
 					BlockReason: t.Reason,
 					Model:       req.Model,
@@ -777,12 +777,12 @@ func (s *Server) recordPolicyViolation(ctx context.Context, req *domain.ChatRequ
 
 	// Create usage record for the blocked request
 	record := &domain.UsageRecord{
-		ID:          uuid.New().String(),
-		APIKeyID:    req.APIKeyID,
-		RequestID:   requestID,
-		Model:       req.Model,
-		Provider:    provider,
-		InputTokens: 0, // Request never processed
+		ID:           uuid.New().String(),
+		APIKeyID:     req.APIKeyID,
+		RequestID:    requestID,
+		Model:        req.Model,
+		Provider:     provider,
+		InputTokens:  0, // Request never processed
 		OutputTokens: 0,
 		TotalTokens:  0,
 		CostUSD:      0,

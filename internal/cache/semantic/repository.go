@@ -13,7 +13,7 @@ import (
 // CacheEntry represents a cached response with embedding
 type CacheEntry struct {
 	ID              string
-	RoleID          string          // Role-based cache isolation
+	RoleID          string // Role-based cache isolation
 	Model           string
 	RequestHash     string
 	RequestContent  []byte          // JSON serialized request/messages

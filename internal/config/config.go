@@ -68,8 +68,8 @@ type TelemetryConfig struct {
 
 // DatabaseConfig contains database settings
 type DatabaseConfig struct {
-	Driver     string        `toml:"driver"`   // "postgres", "sqlite", "memory"
-	DSN        string        `toml:"dsn"`      // Full DSN (alternative to individual fields)
+	Driver     string        `toml:"driver"` // "postgres", "sqlite", "memory"
+	DSN        string        `toml:"dsn"`    // Full DSN (alternative to individual fields)
 	Host       string        `toml:"host"`
 	Port       int           `toml:"port"`
 	User       string        `toml:"user"`

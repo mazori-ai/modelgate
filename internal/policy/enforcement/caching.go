@@ -18,11 +18,11 @@ type CachingEnforcer struct {
 
 // CacheEntry represents a cached response
 type CacheEntry struct {
-	Response   *domain.ChatResponse
-	CachedAt   time.Time
-	ExpiresAt  time.Time
-	HitCount   int
-	CostSaved  float64
+	Response  *domain.ChatResponse
+	CachedAt  time.Time
+	ExpiresAt time.Time
+	HitCount  int
+	CostSaved float64
 }
 
 // NewCachingEnforcer creates a new caching enforcer
@@ -69,7 +69,7 @@ func (e *CachingEnforcer) Get(ctx context.Context, tenantID, roleID string, req 
 
 	// Generate cache key
 	key := e.generateKey(tenantID, roleID, req)
-	
+
 	entry, exists := e.cache[key]
 	if !exists {
 		return nil, false
@@ -96,7 +96,7 @@ func (e *CachingEnforcer) Set(ctx context.Context, tenantID, roleID string, req 
 	defer e.mu.Unlock()
 
 	key := e.generateKey(tenantID, roleID, req)
-	
+
 	e.cache[key] = &CacheEntry{
 		Response:  resp,
 		CachedAt:  time.Now(),
@@ -137,7 +137,7 @@ func (e *CachingEnforcer) enforceMaxSize(tenantID, roleID string, maxSize int) {
 			count++
 		}
 	}
-	
+
 	// If over limit, remove oldest (simplified - should be LRU)
 	if count > maxSize {
 		// TODO: Implement proper LRU eviction
@@ -151,7 +151,7 @@ func (e *CachingEnforcer) GetStats(tenantID, roleID string) CacheStats {
 
 	stats := CacheStats{}
 	prefix := tenantID + ":" + roleID + ":"
-	
+
 	for k, entry := range e.cache {
 		if len(k) >= len(prefix) && k[:len(prefix)] == prefix {
 			stats.EntryCount++
@@ -169,4 +169,3 @@ type CacheStats struct {
 	TotalHits      int
 	TotalCostSaved float64
 }
-

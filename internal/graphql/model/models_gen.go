@@ -511,9 +511,9 @@ type MCPSchemaChange struct {
 }
 
 type MCPServer struct {
-	ID          string  `json:"id"`
-	Name        string  `json:"name"`
-	Description *string `json:"description,omitempty"`
+	ID                  string             `json:"id"`
+	Name                string             `json:"name"`
+	Description         *string            `json:"description,omitempty"`
 	ServerType          MCPServerType      `json:"serverType"`
 	Endpoint            string             `json:"endpoint"`
 	AuthType            MCPAuthType        `json:"authType"`
@@ -882,9 +882,9 @@ type PlanLimitsInput struct {
 }
 
 type PolicyViolationRecord struct {
-	ID       string  `json:"id"`
-	APIKeyID *string `json:"apiKeyId,omitempty"`
-	PolicyID string  `json:"policyId"`
+	ID            string    `json:"id"`
+	APIKeyID      *string   `json:"apiKeyId,omitempty"`
+	PolicyID      string    `json:"policyId"`
 	PolicyName    string    `json:"policyName"`
 	ViolationType string    `json:"violationType"`
 	Severity      int       `json:"severity"`

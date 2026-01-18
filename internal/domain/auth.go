@@ -63,16 +63,16 @@ type Session struct {
 
 // AuthConfig represents authentication configuration
 type AuthConfig struct {
-	ID               string           `json:"id"`
-	Type             AuthType         `json:"type"`
-	Enabled          bool             `json:"enabled"`
-	OIDCConfig       *OIDCConfig      `json:"oidc_config,omitempty"`
-	SAMLConfig       *SAMLConfig      `json:"saml_config,omitempty"`
-	LocalAuthEnabled bool             `json:"local_auth_enabled"`
-	MFARequired      bool             `json:"mfa_required"`
-	SessionDuration  time.Duration    `json:"session_duration"`
-	CreatedAt        time.Time        `json:"created_at"`
-	UpdatedAt        time.Time        `json:"updated_at"`
+	ID               string        `json:"id"`
+	Type             AuthType      `json:"type"`
+	Enabled          bool          `json:"enabled"`
+	OIDCConfig       *OIDCConfig   `json:"oidc_config,omitempty"`
+	SAMLConfig       *SAMLConfig   `json:"saml_config,omitempty"`
+	LocalAuthEnabled bool          `json:"local_auth_enabled"`
+	MFARequired      bool          `json:"mfa_required"`
+	SessionDuration  time.Duration `json:"session_duration"`
+	CreatedAt        time.Time     `json:"created_at"`
+	UpdatedAt        time.Time     `json:"updated_at"`
 }
 
 // AuthType represents the authentication method type
@@ -96,10 +96,10 @@ type OIDCConfig struct {
 
 // SAMLConfig contains SAML configuration
 type SAMLConfig struct {
-	EntityID         string `json:"entity_id"`
-	SSOURL           string `json:"sso_url"`
-	Certificate      string `json:"certificate"`
-	AllowIDPInitiated bool  `json:"allow_idp_initiated"`
+	EntityID          string `json:"entity_id"`
+	SSOURL            string `json:"sso_url"`
+	Certificate       string `json:"certificate"`
+	AllowIDPInitiated bool   `json:"allow_idp_initiated"`
 }
 
 // =============================================================================
@@ -108,17 +108,17 @@ type SAMLConfig struct {
 
 // TelemetryConfig represents telemetry configuration
 type TelemetryConfig struct {
-	ID                  string            `json:"id"`
-	PrometheusEnabled   bool              `json:"prometheus_enabled"`
-	PrometheusEndpoint  string            `json:"prometheus_endpoint,omitempty"`
-	OTLPEnabled         bool              `json:"otlp_enabled"`
-	OTLPEndpoint        string            `json:"otlp_endpoint,omitempty"`
-	LogLevel            string            `json:"log_level"`
-	ExportUsageData     bool              `json:"export_usage_data"`
-	WebhookURL          string            `json:"webhook_url,omitempty"`
-	Metadata            map[string]string `json:"metadata,omitempty"`
-	CreatedAt           time.Time         `json:"created_at"`
-	UpdatedAt           time.Time         `json:"updated_at"`
+	ID                 string            `json:"id"`
+	PrometheusEnabled  bool              `json:"prometheus_enabled"`
+	PrometheusEndpoint string            `json:"prometheus_endpoint,omitempty"`
+	OTLPEnabled        bool              `json:"otlp_enabled"`
+	OTLPEndpoint       string            `json:"otlp_endpoint,omitempty"`
+	LogLevel           string            `json:"log_level"`
+	ExportUsageData    bool              `json:"export_usage_data"`
+	WebhookURL         string            `json:"webhook_url,omitempty"`
+	Metadata           map[string]string `json:"metadata,omitempty"`
+	CreatedAt          time.Time         `json:"created_at"`
+	UpdatedAt          time.Time         `json:"updated_at"`
 }
 
 // =============================================================================
@@ -161,4 +161,3 @@ type TelemetryConfigRepository interface {
 	Update(ctx context.Context, config *TelemetryConfig) error
 	Delete(ctx context.Context, tenantID string) error
 }
-

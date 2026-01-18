@@ -33,8 +33,8 @@ type novaMessage struct {
 }
 
 type novaContentBlock struct {
-	Text    string        `json:"text,omitempty"`
-	ToolUse *novaToolUse  `json:"toolUse,omitempty"`
+	Text       string          `json:"text,omitempty"`
+	ToolUse    *novaToolUse    `json:"toolUse,omitempty"`
 	ToolResult *novaToolResult `json:"toolResult,omitempty"`
 }
 
@@ -45,7 +45,7 @@ type novaToolUse struct {
 }
 
 type novaToolResult struct {
-	ToolUseId string             `json:"toolUseId"`
+	ToolUseId string                  `json:"toolUseId"`
 	Content   []novaToolResultContent `json:"content"`
 }
 
@@ -76,9 +76,9 @@ type novaTool struct {
 }
 
 type novaToolSpec struct {
-	Name        string                 `json:"name"`
-	Description string                 `json:"description,omitempty"`
-	InputSchema *novaInputSchema       `json:"inputSchema"`
+	Name        string           `json:"name"`
+	Description string           `json:"description,omitempty"`
+	InputSchema *novaInputSchema `json:"inputSchema"`
 }
 
 type novaInputSchema struct {
@@ -89,7 +89,7 @@ type novaInputSchema struct {
 type novaResponse struct {
 	Output struct {
 		Message struct {
-			Role    string               `json:"role"`
+			Role    string                `json:"role"`
 			Content []novaResponseContent `json:"content"`
 		} `json:"message"`
 	} `json:"output"`
@@ -424,7 +424,7 @@ func (c *BedrockClient) novaSimulatedStream(ctx context.Context, req *domain.Cha
 		// Process response content - handle both text and tool use
 		var textContent strings.Builder
 		var toolCalls []domain.ToolCall
-		
+
 		for _, content := range novaResp.Output.Message.Content {
 			if content.Text != "" {
 				textContent.WriteString(content.Text)
@@ -440,7 +440,7 @@ func (c *BedrockClient) novaSimulatedStream(ctx context.Context, req *domain.Cha
 				})
 			}
 		}
-		
+
 		// Simulate streaming for text content
 		if text := textContent.String(); text != "" {
 			chunkSize := 20
@@ -452,7 +452,7 @@ func (c *BedrockClient) novaSimulatedStream(ctx context.Context, req *domain.Cha
 				eventChan <- domain.TextChunk{Content: text[i:end]}
 			}
 		}
-		
+
 		// Emit tool call events
 		for _, tc := range toolCalls {
 			eventChan <- domain.ToolCallEvent{ToolCall: tc}
@@ -500,7 +500,7 @@ func (c *BedrockClient) buildNovaRequest(req *domain.ChatRequest) novaRequest {
 			Role:    msg.Role,
 			Content: []novaContentBlock{},
 		}
-		
+
 		// Handle text content
 		for _, content := range msg.Content {
 			if (content.Type == "text" || content.Type == "") && content.Text != "" {
@@ -509,7 +509,7 @@ func (c *BedrockClient) buildNovaRequest(req *domain.ChatRequest) novaRequest {
 				})
 			}
 		}
-		
+
 		// Handle tool calls from assistant messages
 		if msg.Role == "assistant" && len(msg.ToolCalls) > 0 {
 			for _, tc := range msg.ToolCalls {
@@ -522,7 +522,7 @@ func (c *BedrockClient) buildNovaRequest(req *domain.ChatRequest) novaRequest {
 				})
 			}
 		}
-		
+
 		// Handle tool role messages (tool results)
 		if msg.Role == "tool" && msg.ToolCallID != "" {
 			// Tool results should be in a user message for Nova
@@ -545,7 +545,7 @@ func (c *BedrockClient) buildNovaRequest(req *domain.ChatRequest) novaRequest {
 				},
 			}
 		}
-		
+
 		if len(novaMsg.Content) > 0 {
 			novaReq.Messages = append(novaReq.Messages, novaMsg)
 		}
@@ -582,7 +582,7 @@ func (c *BedrockClient) buildNovaRequest(req *domain.ChatRequest) novaRequest {
 						inputSchema["type"] = typeVal
 					}
 				}
-				
+
 				tools = append(tools, novaTool{
 					ToolSpec: &novaToolSpec{
 						Name:        tool.Function.Name,
@@ -667,7 +667,7 @@ func (c *BedrockClient) novaComplete(ctx context.Context, req *domain.ChatReques
 	// Process response content - handle both text and tool use
 	var textContent strings.Builder
 	var toolCalls []domain.ToolCall
-	
+
 	for _, content := range novaResp.Output.Message.Content {
 		if content.Text != "" {
 			textContent.WriteString(content.Text)
@@ -683,10 +683,10 @@ func (c *BedrockClient) novaComplete(ctx context.Context, req *domain.ChatReques
 			})
 		}
 	}
-	
+
 	response.Content = textContent.String()
 	response.ToolCalls = toolCalls
-	
+
 	if len(toolCalls) > 0 {
 		slog.Info("Bedrock Nova (HTTP): Received tool calls",
 			"tool_count", len(toolCalls),
@@ -735,7 +735,7 @@ func (c *BedrockClient) novaConverseComplete(ctx context.Context, req *domain.Ch
 						resultText += content.Text
 					}
 				}
-				
+
 				toolResults = append(toolResults, &types.ContentBlockMemberToolResult{
 					Value: types.ToolResultBlock{
 						ToolUseId: aws.String(toolMsg.ToolCallID),
@@ -748,7 +748,7 @@ func (c *BedrockClient) novaConverseComplete(ctx context.Context, req *domain.Ch
 				})
 				i++
 			}
-			
+
 			// Add as user message (tool results must be in a user message)
 			if len(toolResults) > 0 {
 				messages = append(messages, types.Message{
@@ -941,7 +941,7 @@ func (c *BedrockClient) novaConverseComplete(ctx context.Context, req *domain.Ch
 
 			response.Content = textContent.String()
 			response.ToolCalls = toolCalls
-			
+
 			slog.Info("Bedrock Nova: Response received",
 				"has_content", len(textContent.String()) > 0,
 				"tool_calls_count", len(toolCalls),

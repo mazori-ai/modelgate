@@ -275,7 +275,7 @@ func (s *TenantStore) CreateToolPermission(ctx context.Context, perm *domain.Too
 // This allows a single permission (e.g., "REMOVED") to apply to all variants of a tool
 func (s *TenantStore) GetToolPermission(ctx context.Context, toolID, roleID string) (*domain.ToolRolePermission, error) {
 	slog.Info("GetToolPermission called", "tool_id", toolID, "role_id", roleID)
-	
+
 	// First try exact tool_id match
 	query := `
 		SELECT id, tool_id, role_id, status,
@@ -304,7 +304,7 @@ func (s *TenantStore) GetToolPermission(ctx context.Context, toolID, roleID stri
 		slog.Error("Error getting tool permission", "tool_id", toolID, "role_id", roleID, "error", err)
 		return nil, err
 	}
-	
+
 	slog.Info("Found exact permission match", "tool_id", toolID, "role_id", roleID, "status", perm.Status)
 
 	if decidedBy.Valid {
