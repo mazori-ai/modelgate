@@ -4,7 +4,7 @@
 # =============================================================================
 
 .PHONY: all build modelgate graphql web web-build web-dev web-install web-logs \
-        docker docker-build docker-run docker-stop docker-logs docker-restart \
+        docker docker-build docker-build-local docker-push docker-run docker-stop docker-logs docker-restart \
         compose-up compose-down compose-logs compose-clean compose-rebuild \
         run run-foreground run-all stop stop-all logs dev test lint fmt fmt-go tidy clean setup tools help
 
@@ -31,8 +31,9 @@ LDFLAGS := -ldflags "-s -w -X main.Version=$(VERSION) -X main.BuildTime=$(BUILD_
 # Docker settings
 DOCKER_REGISTRY ?= 
 IMAGE_TAG ?= latest
-DOCKER_IMAGE := $(if $(DOCKER_REGISTRY),$(DOCKER_REGISTRY)/,)modelgate:$(IMAGE_TAG)
+DOCKER_IMAGE := $(DOCKER_REGISTRY)/modelgate:$(IMAGE_TAG)
 DOCKER_CONTAINER := modelgate
+DOCKER_PLATFORMS ?= linux/amd64,linux/arm64
 
 # Docker Compose (optional - for those who have it installed)
 DOCKER_COMPOSE ?= docker-compose
@@ -249,15 +250,40 @@ web-dev:
 # Docker
 # =============================================================================
 
-# Build Docker image
+# Build and push multi-platform Docker image to registry
 docker-build:
-	@echo "🐳 Building $(DOCKER_IMAGE)..."
+	@echo "🐳 Building multi-platform image: $(DOCKER_IMAGE)"
+	@echo "   Platforms: $(DOCKER_PLATFORMS)"
+	@echo ""
+	@# Ensure buildx builder exists
+	@docker buildx inspect modelgate-builder >/dev/null 2>&1 || \
+		docker buildx create --name modelgate-builder --use
+	@docker buildx use modelgate-builder
+	docker buildx build \
+		--platform $(DOCKER_PLATFORMS) \
+		-t $(DOCKER_IMAGE) \
+		-f Dockerfile \
+		--push \
+		.
+	@echo ""
+	@echo "✅ Image built and pushed: $(DOCKER_IMAGE)"
+	@echo "   Platforms: $(DOCKER_PLATFORMS)"
+
+# Build Docker image for local use only (single platform, no push)
+docker-build-local:
+	@echo "🐳 Building local image: $(DOCKER_IMAGE)..."
 	docker build -t $(DOCKER_IMAGE) -f Dockerfile .
 	@echo "✅ Image built: $(DOCKER_IMAGE)"
 
+# Push existing image to registry (use after docker-build-local)
+docker-push:
+	@echo "🐳 Pushing $(DOCKER_IMAGE) to registry..."
+	docker push $(DOCKER_IMAGE)
+	@echo "✅ Image pushed: $(DOCKER_IMAGE)"
+
 # Run container (standalone, requires external postgres)
 # Serves API + Web UI on port 8080, mounts config file
-docker-run: docker-build
+docker-run: docker-build-local
 	@echo "🐳 Running $(DOCKER_CONTAINER) container..."
 	@if docker ps -a --format '{{.Names}}' | grep -q "^$(DOCKER_CONTAINER)$$"; then \
 		echo "⚠️  Container '$(DOCKER_CONTAINER)' already exists. Removing..."; \
@@ -473,12 +499,14 @@ help:
 	@echo "  make web-dev          Run frontend dev server (port 5173)"
 	@echo "  make setup            Full development setup"
 	@echo ""
-	@echo "Docker (Single Container - API + Web UI on 8080):"
-	@echo "  make docker-build     Build modelgate image (includes web UI)"
-	@echo "  make docker-run       Build and run (API + Web UI on 8080)"
-	@echo "  make docker-stop      Stop and remove container"
-	@echo "  make docker-logs      View container logs (tail -f)"
-	@echo "  make docker-restart   Restart container"
+	@echo "Docker (Registry: $(DOCKER_REGISTRY)):"
+	@echo "  make docker-build       Build multi-platform & push to registry"
+	@echo "  make docker-build-local Build for local use only (no push)"
+	@echo "  make docker-push        Push existing image to registry"
+	@echo "  make docker-run         Build local & run container"
+	@echo "  make docker-stop        Stop and remove container"
+	@echo "  make docker-logs        View container logs (tail -f)"
+	@echo "  make docker-restart     Restart container"
 	@echo ""
 	@echo "Docker Compose (Full Stack: Postgres + Ollama + ModelGate):"
 	@echo "  make compose-up       Start all services (includes Ollama)"
@@ -502,8 +530,10 @@ help:
 	@echo "  CONFIG=<file>         Override config file (default: config.toml)"
 	@echo ""
 	@echo "Examples:"
-	@echo "  make run                         # Run locally (API + Web UI on 8080)"
-	@echo "  make docker-run                  # Docker (API + Web UI on 8080)"
-	@echo "  make compose-up                  # Full stack with Postgres"
-	@echo "  make run CONFIG=prod.toml        # Run with custom config"
+	@echo "  make run                              # Run locally (API + Web UI on 8080)"
+	@echo "  make docker-run                       # Docker local (API + Web UI on 8080)"
+	@echo "  make docker-build                     # Build & push to mazoriai/modelgate"
+	@echo "  make docker-build IMAGE_TAG=v1.0.0   # Build & push specific version"
+	@echo "  make compose-up                       # Full stack with Postgres"
+	@echo "  make run CONFIG=prod.toml             # Run with custom config"
 	@echo ""
