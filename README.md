@@ -1,30 +1,29 @@
 # ModelGate
 
 <p align="center">
-  <strong>🚀 Open Source LLM Gateway with Policy Enforcement, MCP Support & Intelligent Routing</strong>
+  <strong>🚀 Open Source LLM Gateway & MCP Server with Policy Enforcement, Semantic Tool Search & Intelligent Routing</strong>
 </p>
 
 <p align="center">
-  <a href="https://github.com/modelgate/modelgate/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="License"></a>
-  <a href="https://github.com/modelgate/modelgate/releases"><img src="https://img.shields.io/github/v/release/modelgate/modelgate" alt="Release"></a>
-  <a href="https://github.com/modelgate/modelgate/actions"><img src="https://img.shields.io/github/actions/workflow/status/modelgate/modelgate/ci.yml?branch=main" alt="CI"></a>
-  <a href="https://goreportcard.com/report/github.com/modelgate/modelgate"><img src="https://goreportcard.com/badge/github.com/modelgate/modelgate" alt="Go Report Card"></a>
-  <a href="https://discord.gg/modelgate"><img src="https://img.shields.io/discord/1234567890?color=7289da&label=Discord&logo=discord&logoColor=white" alt="Discord"></a>
+  <a href="https://github.com/mazori-ai/modelgate/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="License"></a>
+  <a href="https://github.com/mazori-ai/modelgate/releases"><img src="https://img.shields.io/github/v/release/mazori-ai/modelgate" alt="Release"></a>
+  <a href="https://github.com/mazori-ai/modelgate/actions"><img src="https://img.shields.io/github/actions/workflow/status/mazori-ai/modelgate/ci.yml?branch=main" alt="CI"></a>
+  <a href="https://goreportcard.com/report/github.com/mazori-ai/modelgate"><img src="https://goreportcard.com/badge/github.com/mazori-ai/modelgate" alt="Go Report Card"></a>
 </p>
 
 <p align="center">
   <a href="#key-differentiators">Why ModelGate</a> •
   <a href="#features">Features</a> •
+  <a href="#-mcp-gateway--semantic-tool-search">MCP Gateway</a> •
   <a href="#quick-start">Quick Start</a> •
   <a href="#docker-deployment">Docker</a> •
   <a href="#api-usage">API</a> •
-  <a href="CONTRIBUTING.md">Contributing</a> •
-  <a href="https://discord.gg/modelgate">Discord</a>
+  <a href="CONTRIBUTING.md">Contributing</a>
 </p>
 
 ---
 
-> **Like Kong or Envoy, but purpose-built for LLMs** — Unified API for all providers, built-in security, and first-class MCP support.
+> **Like Kong or Envoy, but purpose-built for LLMs** — Unified API for all providers, built-in security, MCP Gateway with semantic tool discovery, and intelligent routing.
 
 ---
 
@@ -36,11 +35,30 @@ ModelGate is built with **Role-Based Access Control at its core**, not bolted on
 ### 🔌 True Multi-Provider with Local Model Support
 Go beyond cloud providers. ModelGate natively supports **Ollama and other local model servers** alongside OpenAI, Anthropic, Google Gemini, AWS Bedrock, Azure OpenAI, Groq, Mistral, Together AI, and Cohere. Run cost-sensitive workloads on local models, sensitive data on air-gapped infrastructure, and complex reasoning on frontier models—all through a single, unified API with automatic provider key rotation and load balancing.
 
-### 🔍 Dynamic Tool Discovery via MCP
-ModelGate implements the **Model Context Protocol (MCP)** for dynamic tool integration. Unlike static tool definitions, MCP servers can register tools at runtime, enabling AI agents to discover new capabilities without code changes. Tools are automatically indexed and made available based on role permissions.
+### 🔌 MCP Gateway with Tool Orchestration
+ModelGate implements a full **Model Context Protocol (MCP) Gateway** that acts as a unified hub for AI agent tools. Unlike static tool definitions, MCP servers can register tools at runtime, enabling AI agents to discover new capabilities without code changes. The gateway handles:
+- **Tool Registration** — Connect any MCP-compliant server (file systems, databases, APIs, custom tools)
+- **Permission Enforcement** — Role-based tool access control (allow, deny, require approval)
+- **Execution Logging** — Full audit trail of every tool invocation
+- **Multi-Server Support** — Aggregate tools from multiple MCP servers into a single endpoint
 
-### 🔎 Semantic Tool Search
-Finding the right tool among hundreds shouldn't require exact name matching. ModelGate's **semantic search tool** (`search_tools`) uses vector embeddings to find relevant tools based on natural language descriptions. Ask for "something to send emails" and find `send_email`, `compose_message`, or `notify_user`—powered by local embeddings via Ollama or OpenAI.
+### 🔎 Semantic Tool Search (`search_tools`)
+Finding the right tool among hundreds shouldn't require exact name matching. ModelGate provides a built-in **`search_tools`** function that AI agents can invoke to discover relevant tools using natural language:
+
+```json
+{
+  "name": "search_tools",
+  "arguments": {
+    "query": "something to read files from disk",
+    "limit": 5
+  }
+}
+```
+
+The `search_tools` tool uses **vector embeddings** (via Ollama or OpenAI) to perform semantic similarity search across all registered tools. Ask for "something to send emails" and find `send_email`, `compose_message`, or `notify_user`—even if you don't know the exact tool name. This enables AI agents to:
+- **Self-discover capabilities** at runtime without hardcoded tool lists
+- **Find similar tools** when the primary tool is unavailable
+- **Explore available tools** based on task descriptions
 
 ### 💾 Semantic Response Caching
 Reduce costs and latency with **intelligent caching** that understands meaning, not just exact matches. Similar prompts hit the cache even when worded differently, dramatically reducing API costs for repetitive workloads. Configurable similarity thresholds let you balance cache hit rates against response accuracy.
@@ -64,8 +82,12 @@ Protect your LLM applications with **advanced prompt injection detection** using
 ### 🚀 OpenAI-Compatible API
 Drop-in replacement for OpenAI API with full streaming support. Use with any OpenAI SDK.
 
-### 🔧 MCP Gateway
-Dynamic tool discovery via Model Context Protocol (MCP) with semantic search capabilities.
+### 🔧 MCP Gateway & Semantic Tool Search
+- Full MCP server implementation for AI agent tool orchestration
+- Built-in `search_tools` function for semantic tool discovery
+- Connect multiple MCP servers (file systems, databases, APIs)
+- Role-based tool permissions (allow, deny, require approval)
+- Automatic tool indexing with vector embeddings
 
 ### 💾 Semantic Caching
 Reduce costs and latency with intelligent response caching based on semantic similarity.
@@ -260,7 +282,7 @@ Expected output:
 
 ```bash
 # Clone repository
-git clone https://github.com/modelgate/modelgate.git
+git clone https://github.com/mazori-ai/modelgate.git
 cd modelgate
 
 # Copy environment config
@@ -292,7 +314,7 @@ createdb modelgate
 psql modelgate -c "CREATE EXTENSION IF NOT EXISTS vector;"
 
 # 3. Clone and build
-git clone https://github.com/modelgate/modelgate.git
+git clone https://github.com/mazori-ai/modelgate.git
 cd modelgate
 make build
 
@@ -406,6 +428,36 @@ curl http://localhost:8080/v1/models \
   -H "Authorization: Bearer mg-your-api-key"
 ```
 
+### Tool Calling with MCP
+
+```bash
+# AI agent can discover and use tools dynamically
+curl http://localhost:8080/v1/chat/completions \
+  -H "Authorization: Bearer mg-your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "claude",
+    "messages": [{"role": "user", "content": "Find tools that can help me read files"}],
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "search_tools",
+          "description": "Search for available tools by description",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "query": {"type": "string", "description": "Natural language description of what you need"},
+              "limit": {"type": "integer", "description": "Max results to return"}
+            },
+            "required": ["query"]
+          }
+        }
+      }
+    ]
+  }'
+```
+
 ### Python SDK Example
 
 ```python
@@ -429,6 +481,8 @@ print(response.choices[0].message.content)
 
 ### config.toml
 
+The config file contains **server settings only**. Provider API keys and models are configured via the Dashboard UI.
+
 ```toml
 [server]
 http_port = 8080          # Unified API (OpenAI + GraphQL + MCP)
@@ -444,24 +498,26 @@ database = "modelgate"
 ssl_mode = "disable"
 
 [embedder]
-type = "ollama"                      # or "openai"
+type = "ollama"                      # or "openai" for cloud embeddings
 base_url = "http://localhost:11434"
 model = "nomic-embed-text"
 
-# Model aliases (optional)
+[telemetry]
+log_level = "info"                   # debug, info, warn, error
+
+# Model aliases (optional) - map friendly names to full model IDs
 [aliases]
-default = "anthropic/claude-sonnet-4-20250514"
 claude = "anthropic/claude-sonnet-4-20250514"
 gpt4 = "openai/gpt-4o"
 ```
 
-### Provider Setup
+### Provider & Model Setup
 
-Configure LLM providers in the **Dashboard UI** under **Providers**:
+Configure LLM providers in the **Dashboard UI**:
 
-1. Navigate to Settings → Providers
-2. Add your API keys for each provider
-3. Enable/disable providers as needed
+1. **Providers** → Add API keys for OpenAI, Anthropic, Bedrock, etc.
+2. **Models** → Refresh models from providers, enable/disable as needed
+3. **Roles** → Create roles with model access policies
 
 ---
 
@@ -577,7 +633,7 @@ make help    # Show all available targets
 We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
 
 - Read the [Code of Conduct](CODE_OF_CONDUCT.md)
-- Check [good first issues](https://github.com/modelgate/modelgate/labels/good%20first%20issue) for newcomers
+- Check [good first issues](https://github.com/mazori-ai/modelgate/labels/good%20first%20issue) for newcomers
 - See [SECURITY.md](SECURITY.md) for reporting vulnerabilities
 
 ---
@@ -588,7 +644,8 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 |---------|-----------|---------|---------|------------|
 | **Open Source** | ✅ Apache 2.0 | ✅ MIT | ❌ Closed | ❌ Closed |
 | **Self-Hosted** | ✅ Full | ✅ Full | ❌ SaaS only | ❌ SaaS only |
-| **MCP Support** | ✅ Native | ❌ | ❌ | ❌ |
+| **MCP Gateway** | ✅ Full server | ❌ | ❌ | ❌ |
+| **Semantic Tool Search** | ✅ `search_tools` | ❌ | ❌ | ❌ |
 | **Prompt Security** | ✅ Built-in | ❌ | ✅ | ❌ |
 | **Tool RBAC** | ✅ Fine-grained | ❌ | ❌ | ❌ |
 | **Semantic Caching** | ✅ Vector-based | ❌ | ✅ | ❌ |
