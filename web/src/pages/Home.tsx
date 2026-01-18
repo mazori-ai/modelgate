@@ -84,8 +84,8 @@ export function HomePage() {
     },
     {
       icon: Zap,
-      title: 'Dual API Support',
-      description: 'Native gRPC and OpenAI-compatible HTTP APIs with streaming support for real-time responses',
+      title: 'OpenAI-Compatible API',
+      description: 'Drop-in replacement for OpenAI API with streaming support for real-time responses',
     },
     {
       icon: BarChart3,
@@ -467,7 +467,6 @@ export function HomePage() {
                   'Same request/response format as OpenAI',
                   'Streaming support with SSE',
                   'Function calling & tool use',
-                  'Native gRPC API for high performance',
                   'GraphQL admin API for management',
                 ].map((item, index) => (
                   <div 

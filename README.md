@@ -546,7 +546,6 @@ ModelGate supports 7 policy types for granular control:
 | [Policy Enforcement](docs/POLICY_ENFORCEMENT.md) | Policy system details |
 | [Prompt Security](docs/PROMPT_SECURITY_FRAMEWORK.md) | Security framework |
 | [Metrics](docs/METRICS.md) | Prometheus metrics reference |
-| [Why ModelGate](docs/WHY_MODELGATE.md) | Comparison with alternatives |
 
 ---
 
@@ -635,21 +634,6 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 - Read the [Code of Conduct](CODE_OF_CONDUCT.md)
 - Check [good first issues](https://github.com/mazori-ai/modelgate/labels/good%20first%20issue) for newcomers
 - See [SECURITY.md](SECURITY.md) for reporting vulnerabilities
-
----
-
-## Comparison with Alternatives
-
-| Feature | ModelGate | LiteLLM | Portkey | OpenRouter |
-|---------|-----------|---------|---------|------------|
-| **Open Source** | ✅ Apache 2.0 | ✅ MIT | ❌ Closed | ❌ Closed |
-| **Self-Hosted** | ✅ Full | ✅ Full | ❌ SaaS only | ❌ SaaS only |
-| **MCP Gateway** | ✅ Full server | ❌ | ❌ | ❌ |
-| **Semantic Tool Search** | ✅ `search_tools` | ❌ | ❌ | ❌ |
-| **Prompt Security** | ✅ Built-in | ❌ | ✅ | ❌ |
-| **Tool RBAC** | ✅ Fine-grained | ❌ | ❌ | ❌ |
-| **Semantic Caching** | ✅ Vector-based | ❌ | ✅ | ❌ |
-| **Local Models** | ✅ Ollama | ✅ | ❌ | ❌ |
 
 ---
 

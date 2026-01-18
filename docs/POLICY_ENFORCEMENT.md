@@ -6,7 +6,7 @@ The Policy Enforcement Module is a comprehensive security and governance layer t
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    HTTP/gRPC Request                         │
+│                       HTTP Request                           │
 └──────────────────────────┬──────────────────────────────────┘
                            │
                            ▼
@@ -284,7 +284,7 @@ Policy enforcement is automatically applied to all `/v1/chat/completions` reques
 
 ### Gateway Service
 
-The gateway exposes a public `EnforcePolicy()` method that can be called by any server (HTTP, gRPC):
+The gateway exposes a public `EnforcePolicy()` method that can be called by the HTTP server:
 
 ```go
 func (s *Service) EnforcePolicy(ctx context.Context, req *domain.ChatRequest, rolePolicy *domain.RolePolicy) error

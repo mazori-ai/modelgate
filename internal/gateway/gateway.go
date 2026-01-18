@@ -91,7 +91,7 @@ func NewServiceWithFeatures(
 }
 
 // EnforcePolicy validates all policies before allowing an LLM operation
-// This is the public method exposed for HTTP/gRPC servers to call
+// This is the public method exposed for the HTTP server to call
 func (s *Service) EnforcePolicy(ctx context.Context, req *domain.ChatRequest, rolePolicy *domain.RolePolicy) error {
 	if s.policyEnforcement == nil || rolePolicy == nil {
 		return nil
@@ -414,9 +414,8 @@ func (s *Service) ChatStream(ctx context.Context, req *domain.ChatRequest) (<-ch
 
 	// NOTE: For streaming, we don't do explicit circuit breaker checks or fallbacks
 	// Health tracking will inform routing decisions for subsequent requests
-	// Policy enforcement is now done at the HTTP/gRPC layer BEFORE reaching gateway
+	// Policy enforcement is now done at the HTTP layer BEFORE reaching gateway
 	// The new policy enforcement module (internal/policy/enforcement.go) handles all validation
-	// Old ARN-based policy engine is skipped for HTTP/gRPC requests
 
 	// =========================================================================
 	// 4. GET CLIENT - Load provider client

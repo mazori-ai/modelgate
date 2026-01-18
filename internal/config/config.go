@@ -44,7 +44,7 @@ type ServerConfig struct {
 	WriteTimeout   time.Duration `toml:"write_timeout"`
 	MaxRequestSize int64         `toml:"max_request_size"`
 
-	// Adaptive dispatcher configuration (Bifrost-style)
+	// Adaptive dispatcher configuration
 	MinWorkers         int     `toml:"min_workers"`          // Minimum workers (always running)
 	MaxWorkers         int     `toml:"max_workers"`          // Maximum workers (scale up limit)
 	MaxQueuedRequests  int     `toml:"max_queued_requests"`  // Max requests waiting in queue
