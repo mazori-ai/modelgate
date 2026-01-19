@@ -19,7 +19,7 @@ We take the security of ModelGate seriously. If you believe you have found a sec
 
 Instead, please report them via email to:
 
-**security@modelgate.dev**
+**security@mazori.ai**
 
 You should receive a response within 48 hours. If for some reason you do not, please follow up via email to ensure we received your original message.
 
@@ -123,7 +123,7 @@ We follow a coordinated disclosure process:
 
 Security advisories will be published on:
 - GitHub Security Advisories
-- Our security mailing list (subscribe at security-announce@modelgate.dev)
+- Our security mailing list (subscribe at security@mazori.ai)
 - Release notes
 
 ## Bug Bounty
@@ -132,8 +132,8 @@ We currently do not have a formal bug bounty program, but we do offer recognitio
 
 ## Contact
 
-- **Security issues**: security@modelgate.dev
-- **General questions**: support@modelgate.dev
+- **Security issues**: security@mazori.ai
+- **General questions**: support@mazori.ai
 
 Thank you for helping keep ModelGate and our users safe!
 
