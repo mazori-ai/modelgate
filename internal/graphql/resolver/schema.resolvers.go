@@ -2417,11 +2417,8 @@ func (r *queryResolver) Dashboard(ctx context.Context) (*model.DashboardStats, e
 		return nil, fmt.Errorf("tenant not found in context")
 	}
 
-	// Get tenant slug from metadata
-	tenantSlug, ok := tenant.Metadata["slug"]
-	if !ok || tenantSlug == "" {
-		tenantSlug = tenant.ID
-	}
+	// Note: tenant slug available in tenant.Metadata["slug"] or tenant.ID if needed
+	_ = tenant // Used for context validation
 
 	if r.PGStore == nil {
 		// Return empty dashboard if no database

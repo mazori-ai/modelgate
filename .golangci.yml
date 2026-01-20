@@ -52,3 +52,8 @@ issues:
     - path: internal/graphql/model/models_gen\.go
       linters:
         - all
+    
+    # Fuzzy detection test contains intentional typos as test data
+    - path: internal/policy/fuzzy_detection_test\.go
+      linters:
+        - misspell

@@ -1,3 +1,4 @@
+//nolint:misspell // This file contains intentional typos as test data for fuzzy detection
 package policy
 
 import (

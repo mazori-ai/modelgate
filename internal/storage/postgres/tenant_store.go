@@ -2204,7 +2204,6 @@ func (s *TenantStore) ListAuditLogs(ctx context.Context, filter domain.AuditLogF
 	if filter.Offset > 0 {
 		query += fmt.Sprintf(" OFFSET $%d", argIdx)
 		args = append(args, filter.Offset)
-		argIdx++
 	}
 
 	rows, err := s.db.QueryContext(ctx, query, args...)
@@ -2299,7 +2298,6 @@ func (s *TenantStore) CountAuditLogs(ctx context.Context, filter domain.AuditLog
 	if filter.ActorID != "" {
 		query += fmt.Sprintf(" AND actor_id = $%d", argIdx)
 		args = append(args, filter.ActorID)
-		argIdx++
 	}
 
 	var count int

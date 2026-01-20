@@ -115,6 +115,7 @@ type RoleToolStore interface {
 	CreateOrUpdateRoleTool(ctx context.Context, tool *domain.RoleTool) error
 	GetRoleTool(ctx context.Context, id string) (*domain.RoleTool, error)
 	GetRoleToolByIdentity(ctx context.Context, roleID, name, schemaHash string) (*domain.RoleTool, error)
+	GetRoleToolByName(ctx context.Context, roleID, name string) (*domain.RoleTool, error)
 	UpdateRoleToolSeen(ctx context.Context, id string) error
 	LogToolExecution(ctx context.Context, log *domain.ToolExecutionLog) error
 }
@@ -143,6 +144,24 @@ func (s *ToolDiscoveryService) DiscoverToolsForRole(
 		parameters := tool.Function.Parameters
 		if parameters == nil {
 			parameters = map[string]any{}
+		}
+
+		// Special handling for tool_search - it's an internal tool that clients may define
+		// with different schemas. Match by name only, not by schema hash.
+		if name == "tool_search" {
+			existing, err := store.GetRoleToolByName(ctx, roleID, "tool_search")
+			if err == nil && existing != nil {
+				// Found existing tool_search entry - use it regardless of schema
+				if err := store.UpdateRoleToolSeen(ctx, existing.ID); err != nil {
+					slog.Warn("Failed to update tool_search seen", "tool_id", existing.ID, "error", err)
+				}
+				discovered = append(discovered, existing)
+				continue
+			}
+			// No existing tool_search - skip creating one here
+			// It should be created via MCP permission sync, not from client requests
+			slog.Debug("tool_search not found for role, skipping", "role_id", roleID)
+			continue
 		}
 
 		schemaHash := ComputeSchemaHash(parameters)

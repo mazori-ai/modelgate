@@ -860,7 +860,7 @@ func (r *mutationResolver) ensureToolSearchAllowed(
 	roleID string,
 	actorID string,
 ) error {
-	// tool_search has a fixed schema
+	// tool_search has a fixed schema - MUST match mcp/server.go and mcp/gateway.go
 	toolSearchSchema := map[string]interface{}{
 		"type": "object",
 		"properties": map[string]interface{}{
@@ -871,10 +871,12 @@ func (r *mutationResolver) ensureToolSearchAllowed(
 			"category": map[string]interface{}{
 				"type":        "string",
 				"description": "Optional category filter",
+				"enum":        []string{"messaging", "file-system", "database", "api", "git", "calendar", "shell", "search", "other"},
 			},
 			"max_results": map[string]interface{}{
 				"type":        "integer",
 				"description": "Maximum number of tools to return (default: 5)",
+				"default":     5,
 			},
 		},
 		"required": []string{"query"},
