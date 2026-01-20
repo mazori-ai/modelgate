@@ -1,0 +1,54 @@
+# golangci-lint configuration
+# https://golangci-lint.run/usage/configuration/
+
+run:
+  timeout: 5m
+  modules-download-mode: readonly
+
+linters:
+  enable:
+    - gofmt
+    - goimports
+    - govet
+    - errcheck
+    - staticcheck
+    - ineffassign
+    - unused
+    - misspell
+
+linters-settings:
+  gofmt:
+    # Apply simplify command (gofmt -s)
+    simplify: true
+  
+  goimports:
+    # Put local imports after 3rd-party packages
+    local-prefixes: modelgate
+
+  misspell:
+    locale: US
+
+issues:
+  # Don't skip any files
+  exclude-use-default: false
+  
+  # Maximum issues per linter
+  max-issues-per-linter: 50
+  
+  # Maximum same issues 
+  max-same-issues: 3
+
+  exclude-rules:
+    # Ignore certain linters in test files
+    - path: _test\.go
+      linters:
+        - errcheck
+    
+    # Ignore generated files
+    - path: internal/graphql/generated/
+      linters:
+        - all
+    
+    - path: internal/graphql/model/models_gen\.go
+      linters:
+        - all

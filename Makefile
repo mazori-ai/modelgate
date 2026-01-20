@@ -62,7 +62,7 @@ modelgate: fmt-go
 
 # Format Go code (runs before build)
 fmt-go:
-	@gofmt -w cmd/ internal/
+	@gofmt -s -w cmd/ internal/
 
 # Run the application (builds backend + web, runs in background)
 run: modelgate
@@ -423,7 +423,7 @@ lint:
 # Format code (Go + imports)
 fmt:
 	@echo "✨ Formatting code..."
-	@gofmt -w cmd/ internal/
+	@gofmt -s -w cmd/ internal/
 	@goimports -w cmd/ internal/ 2>/dev/null || true
 
 # Tidy dependencies
