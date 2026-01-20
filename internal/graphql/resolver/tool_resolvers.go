@@ -3,12 +3,9 @@ package resolver
 import (
 	"context"
 	"errors"
-	"time"
 
 	"modelgate/internal/domain"
 	"modelgate/internal/graphql/model"
-
-	"github.com/google/uuid"
 )
 
 var errToolTenantRequired = errors.New("tenant context required")
@@ -42,6 +39,7 @@ func getActorInfoFromContext(ctx context.Context) (string, string, string) {
 // ============================================================================
 
 // DiscoveredToolsImpl implements the discoveredTools query
+// Note: Now requires roleId in filter to get role-specific tools
 func (r *queryResolver) DiscoveredToolsImpl(ctx context.Context, filter *model.DiscoveredToolFilter, limit *int, offset *int) (*model.DiscoveredToolConnection, error) {
 	tenantSlug := GetTenantFromContext(ctx)
 	if tenantSlug == "" {
@@ -53,21 +51,25 @@ func (r *queryResolver) DiscoveredToolsImpl(ctx context.Context, filter *model.D
 		return nil, err
 	}
 
+	// RoleID is now required for listing tools
+	if filter == nil || filter.RoleID == nil || *filter.RoleID == "" {
+		return &model.DiscoveredToolConnection{
+			Items:      []model.DiscoveredTool{},
+			TotalCount: 0,
+			HasMore:    false,
+		}, nil
+	}
+
 	// Build filter
 	domainFilter := domain.ToolFilter{}
-	if filter != nil {
-		if filter.Name != nil {
-			domainFilter.Name = *filter.Name
-		}
-		if filter.Category != nil {
-			domainFilter.Category = *filter.Category
-		}
-		if filter.RoleID != nil {
-			domainFilter.RoleID = *filter.RoleID
-		}
-		if filter.Status != nil {
-			domainFilter.Status = domain.ToolPermissionStatus(*filter.Status)
-		}
+	if filter.Name != nil {
+		domainFilter.Name = *filter.Name
+	}
+	if filter.Category != nil {
+		domainFilter.Category = *filter.Category
+	}
+	if filter.Status != nil {
+		domainFilter.Status = domain.ToolPermissionStatus(*filter.Status)
 	}
 
 	limitVal := 50
@@ -79,14 +81,14 @@ func (r *queryResolver) DiscoveredToolsImpl(ctx context.Context, filter *model.D
 		offsetVal = *offset
 	}
 
-	tools, total, err := store.ListDiscoveredTools(ctx, domainFilter, limitVal, offsetVal)
+	tools, total, err := store.ListRoleTools(ctx, *filter.RoleID, domainFilter, limitVal, offsetVal)
 	if err != nil {
 		return nil, err
 	}
 
 	items := make([]model.DiscoveredTool, 0, len(tools))
 	for _, t := range tools {
-		items = append(items, convertDomainToolToModel(t))
+		items = append(items, convertRoleToolToModel(t))
 	}
 
 	return &model.DiscoveredToolConnection{
@@ -108,7 +110,7 @@ func (r *queryResolver) DiscoveredToolImpl(ctx context.Context, id string) (*mod
 		return nil, err
 	}
 
-	tool, err := store.GetDiscoveredTool(ctx, id)
+	tool, err := store.GetRoleTool(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -116,11 +118,12 @@ func (r *queryResolver) DiscoveredToolImpl(ctx context.Context, id string) (*mod
 		return nil, nil
 	}
 
-	result := convertDomainToolToModel(tool)
+	result := convertRoleToolToModel(tool)
 	return &result, nil
 }
 
 // RoleToolPermissionsImpl implements the roleToolPermissions query
+// Now simplified - tools and permissions are in the same table
 func (r *queryResolver) RoleToolPermissionsImpl(ctx context.Context, roleID string) ([]model.ToolWithPermission, error) {
 	tenantSlug := GetTenantFromContext(ctx)
 	if tenantSlug == "" {
@@ -132,53 +135,34 @@ func (r *queryResolver) RoleToolPermissionsImpl(ctx context.Context, roleID stri
 		return nil, err
 	}
 
-	// Get all tools
-	tools, _, err := store.ListDiscoveredTools(ctx, domain.ToolFilter{}, 1000, 0)
+	// Get all tools for this role (they now include permissions inline)
+	tools, _, err := store.ListRoleTools(ctx, roleID, domain.ToolFilter{}, 1000, 0)
 	if err != nil {
 		return nil, err
 	}
 
-	// Get permissions for this role
-	permissions, err := store.ListToolPermissions(ctx, roleID)
-	if err != nil {
-		return nil, err
-	}
-
-	// Create a map for quick lookup
-	permMap := make(map[string]*domain.ToolRolePermission)
-	for _, p := range permissions {
-		permMap[p.ToolID] = p
-	}
-
-	// Build result
+	// Build result - permissions are now inline in the tool
 	results := make([]model.ToolWithPermission, 0, len(tools))
 	for _, tool := range tools {
-		toolModel := convertDomainToolToModel(tool)
-		status := model.ToolPermissionStatusPending
+		toolModel := convertRoleToolToModel(tool)
 
 		var decidedBy, decidedByEmail, decisionReason *string
-		var decidedAt *time.Time
-
-		if perm, ok := permMap[tool.ID]; ok {
-			status = model.ToolPermissionStatus(perm.Status)
-			if perm.DecidedBy != "" {
-				decidedBy = &perm.DecidedBy
-			}
-			if perm.DecidedByEmail != "" {
-				decidedByEmail = &perm.DecidedByEmail
-			}
-			if perm.DecisionReason != "" {
-				decisionReason = &perm.DecisionReason
-			}
-			decidedAt = perm.DecidedAt
+		if tool.DecidedBy != "" {
+			decidedBy = &tool.DecidedBy
+		}
+		if tool.DecidedByEmail != "" {
+			decidedByEmail = &tool.DecidedByEmail
+		}
+		if tool.DecisionReason != "" {
+			decisionReason = &tool.DecisionReason
 		}
 
 		results = append(results, model.ToolWithPermission{
 			Tool:           &toolModel,
-			Status:         status,
+			Status:         model.ToolPermissionStatus(tool.Status),
 			DecidedBy:      decidedBy,
 			DecidedByEmail: decidedByEmail,
-			DecidedAt:      decidedAt,
+			DecidedAt:      tool.DecidedAt,
 			DecisionReason: decisionReason,
 		})
 	}
@@ -205,7 +189,7 @@ func (r *queryResolver) PendingToolsImpl(ctx context.Context) ([]model.Discovere
 
 	results := make([]model.DiscoveredTool, 0, len(tools))
 	for _, t := range tools {
-		results = append(results, convertDomainToolToModel(t))
+		results = append(results, convertRoleToolToModel(t))
 	}
 
 	return results, nil
@@ -274,6 +258,7 @@ func (r *queryResolver) ToolExecutionLogsImpl(ctx context.Context, filter *model
 // ============================================================================
 
 // SetToolPermissionImpl implements the setToolPermission mutation
+// Now updates the role_tools table directly (permission is inline)
 func (r *mutationResolver) SetToolPermissionImpl(ctx context.Context, input model.SetToolPermissionInput) (*model.ToolRolePermission, error) {
 	tenantSlug := GetTenantFromContext(ctx)
 	if tenantSlug == "" {
@@ -288,31 +273,21 @@ func (r *mutationResolver) SetToolPermissionImpl(ctx context.Context, input mode
 	// Get actor info from context
 	actorID, actorEmail, _ := getActorInfoFromContext(ctx)
 
-	now := time.Now()
-	perm := &domain.ToolRolePermission{
-		ID:             uuid.New().String(),
-		ToolID:         input.ToolID,
-		RoleID:         input.RoleID,
-		Status:         domain.ToolPermissionStatus(input.Status),
-		DecidedBy:      actorID,
-		DecidedByEmail: actorEmail,
-		DecidedAt:      &now,
-	}
-
+	reason := ""
 	if input.Reason != nil {
-		perm.DecisionReason = *input.Reason
+		reason = *input.Reason
 	}
 
-	// Create or update permission
-	if err := store.CreateToolPermission(ctx, perm); err != nil {
+	// Update the tool's permission directly (it's now inline in role_tools)
+	if err := store.SetRoleToolPermission(ctx, input.ToolID, domain.ToolPermissionStatus(input.Status), actorID, actorEmail, reason); err != nil {
 		return nil, err
 	}
 
-	// Fetch the tool and role for the response
-	tool, _ := store.GetDiscoveredTool(ctx, input.ToolID)
+	// Fetch the updated tool for the response
+	tool, _ := store.GetRoleTool(ctx, input.ToolID)
 	role, _ := store.GetRole(ctx, input.RoleID)
 
-	return convertDomainPermToModel(perm, tool, role), nil
+	return convertRoleToolToPermModel(tool, role), nil
 }
 
 // SetToolPermissionsBulkImpl implements the setToolPermissionsBulk mutation
@@ -331,30 +306,22 @@ func (r *mutationResolver) SetToolPermissionsBulkImpl(ctx context.Context, input
 	actorID, actorEmail, _ := getActorInfoFromContext(ctx)
 
 	results := make([]model.ToolRolePermission, 0, len(input.Permissions))
-	now := time.Now()
 
 	for _, p := range input.Permissions {
-		perm := &domain.ToolRolePermission{
-			ID:             uuid.New().String(),
-			ToolID:         p.ToolID,
-			RoleID:         input.RoleID,
-			Status:         domain.ToolPermissionStatus(p.Status),
-			DecidedBy:      actorID,
-			DecidedByEmail: actorEmail,
-			DecidedAt:      &now,
-		}
-
+		reason := ""
 		if p.Reason != nil {
-			perm.DecisionReason = *p.Reason
+			reason = *p.Reason
 		}
 
-		if err := store.CreateToolPermission(ctx, perm); err != nil {
+		if err := store.SetRoleToolPermission(ctx, p.ToolID, domain.ToolPermissionStatus(p.Status), actorID, actorEmail, reason); err != nil {
 			continue
 		}
 
-		tool, _ := store.GetDiscoveredTool(ctx, p.ToolID)
+		tool, _ := store.GetRoleTool(ctx, p.ToolID)
 		role, _ := store.GetRole(ctx, input.RoleID)
-		results = append(results, *convertDomainPermToModel(perm, tool, role))
+		if tool != nil {
+			results = append(results, *convertRoleToolToPermModel(tool, role))
+		}
 	}
 
 	return results, nil
@@ -374,7 +341,7 @@ func (r *mutationResolver) ApproveAllPendingToolsImpl(ctx context.Context, roleI
 
 	actorID, actorEmail, _ := getActorInfoFromContext(ctx)
 
-	count, err := store.BulkUpdatePermissions(ctx, roleID, domain.ToolStatusAllowed, actorID, actorEmail)
+	count, err := store.BulkSetRoleToolPermissions(ctx, roleID, domain.ToolStatusAllowed, actorID, actorEmail)
 	if err != nil {
 		return 0, err
 	}
@@ -396,7 +363,7 @@ func (r *mutationResolver) DenyAllPendingToolsImpl(ctx context.Context, roleID s
 
 	actorID, actorEmail, _ := getActorInfoFromContext(ctx)
 
-	count, err := store.BulkUpdatePermissions(ctx, roleID, domain.ToolStatusDenied, actorID, actorEmail)
+	count, err := store.BulkSetRoleToolPermissions(ctx, roleID, domain.ToolStatusDenied, actorID, actorEmail)
 	if err != nil {
 		return 0, err
 	}
@@ -418,7 +385,7 @@ func (r *mutationResolver) RemoveAllPendingToolsImpl(ctx context.Context, roleID
 
 	actorID, actorEmail, _ := getActorInfoFromContext(ctx)
 
-	count, err := store.BulkUpdatePermissions(ctx, roleID, domain.ToolStatusRemoved, actorID, actorEmail)
+	count, err := store.BulkSetRoleToolPermissions(ctx, roleID, domain.ToolStatusRemoved, actorID, actorEmail)
 	if err != nil {
 		return 0, err
 	}
@@ -438,7 +405,7 @@ func (r *mutationResolver) DeleteDiscoveredToolImpl(ctx context.Context, id stri
 		return false, err
 	}
 
-	if err := store.DeleteDiscoveredTool(ctx, id); err != nil {
+	if err := store.DeleteRoleTool(ctx, id); err != nil {
 		return false, err
 	}
 
@@ -449,7 +416,8 @@ func (r *mutationResolver) DeleteDiscoveredToolImpl(ctx context.Context, id stri
 // Helper Functions
 // ============================================================================
 
-func convertDomainToolToModel(t *domain.DiscoveredTool) model.DiscoveredTool {
+// convertRoleToolToModel converts a domain.RoleTool to a GraphQL model.DiscoveredTool
+func convertRoleToolToModel(t *domain.RoleTool) model.DiscoveredTool {
 	var firstSeenBy, category *string
 	if t.FirstSeenBy != "" {
 		firstSeenBy = &t.FirstSeenBy
@@ -487,6 +455,11 @@ func convertDomainToolToModel(t *domain.DiscoveredTool) model.DiscoveredTool {
 	}
 }
 
+// convertDomainToolToModel is an alias for backward compatibility
+func convertDomainToolToModel(t *domain.RoleTool) model.DiscoveredTool {
+	return convertRoleToolToModel(t)
+}
+
 func convertDomainLogToModel(l *domain.ToolExecutionLog) model.ToolExecutionLog {
 	var apiKeyID, requestID, blockReason, logModel *string
 	if l.APIKeyID != "" {
@@ -504,7 +477,7 @@ func convertDomainLogToModel(l *domain.ToolExecutionLog) model.ToolExecutionLog 
 
 	return model.ToolExecutionLog{
 		ID:          l.ID,
-		ToolID:      l.ToolID,
+		ToolID:      l.RoleToolID, // Map RoleToolID to ToolID for GraphQL
 		ToolName:    l.ToolName,
 		RoleID:      l.RoleID,
 		APIKeyID:    apiKeyID,
@@ -516,7 +489,53 @@ func convertDomainLogToModel(l *domain.ToolExecutionLog) model.ToolExecutionLog 
 	}
 }
 
-func convertDomainPermToModel(p *domain.ToolRolePermission, tool *domain.DiscoveredTool, role *domain.Role) *model.ToolRolePermission {
+// convertRoleToolToPermModel converts a RoleTool to ToolRolePermission model
+func convertRoleToolToPermModel(tool *domain.RoleTool, role *domain.Role) *model.ToolRolePermission {
+	if tool == nil {
+		return nil
+	}
+
+	var decidedBy, decidedByEmail, decisionReason *string
+	if tool.DecidedBy != "" {
+		decidedBy = &tool.DecidedBy
+	}
+	if tool.DecidedByEmail != "" {
+		decidedByEmail = &tool.DecidedByEmail
+	}
+	if tool.DecisionReason != "" {
+		decisionReason = &tool.DecisionReason
+	}
+
+	toolModel := convertRoleToolToModel(tool)
+
+	result := &model.ToolRolePermission{
+		ID:             tool.ID,
+		Status:         model.ToolPermissionStatus(tool.Status),
+		DecidedBy:      decidedBy,
+		DecidedByEmail: decidedByEmail,
+		DecidedAt:      tool.DecidedAt,
+		DecisionReason: decisionReason,
+		CreatedAt:      tool.CreatedAt,
+		UpdatedAt:      tool.UpdatedAt,
+		Tool:           &toolModel,
+	}
+
+	if role != nil {
+		result.Role = &model.Role{
+			ID:   role.ID,
+			Name: role.Name,
+		}
+	}
+
+	return result
+}
+
+// convertDomainPermToModel is kept for backward compatibility
+func convertDomainPermToModel(p *domain.ToolRolePermission, tool *domain.RoleTool, role *domain.Role) *model.ToolRolePermission {
+	if tool != nil {
+		return convertRoleToolToPermModel(tool, role)
+	}
+
 	var decidedBy, decidedByEmail, decisionReason *string
 	if p.DecidedBy != "" {
 		decidedBy = &p.DecidedBy
@@ -539,13 +558,7 @@ func convertDomainPermToModel(p *domain.ToolRolePermission, tool *domain.Discove
 		UpdatedAt:      p.UpdatedAt,
 	}
 
-	if tool != nil {
-		t := convertDomainToolToModel(tool)
-		result.Tool = &t
-	}
-
 	if role != nil {
-		// Convert role to model - minimal fields for now
 		result.Role = &model.Role{
 			ID:   role.ID,
 			Name: role.Name,

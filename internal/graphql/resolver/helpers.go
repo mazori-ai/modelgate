@@ -767,9 +767,9 @@ func getPlanCeiling(tier domain.TenantTier) *model.ConnectionSettings {
 // MCP TOOL SYNC HELPER
 // =============================================================================
 
-// syncMCPToolToDiscoveredTools syncs an MCP tool to the discovered_tools table
-// when it's approved for a role
-func (r *mutationResolver) syncMCPToolToDiscoveredTools(
+// syncMCPToolToRoleTools syncs an MCP tool to the role_tools table
+// when it's approved for a role. Creates a role-specific tool entry with ALLOWED status.
+func (r *mutationResolver) syncMCPToolToRoleTools(
 	ctx context.Context,
 	store *postgres.TenantStore,
 	roleID string,
@@ -790,70 +790,56 @@ func (r *mutationResolver) syncMCPToolToDiscoveredTools(
 	// Sanitize tool name with server prefix (e.g., "local_mcp__calculator")
 	sanitizedName := mcp.SanitizeToolName(mcpTool.ServerName, mcpTool.Name)
 
-	// 2. Compute schema hash (same logic as DiscoverToolsFromRequest)
+	// 2. Compute schema hash
 	schemaHash := policy.ComputeSchemaHash(mcpTool.InputSchema)
 
-	// 3. Check if tool already exists in discovered_tools
-	existingTool, err := store.GetToolByIdentity(ctx, sanitizedName, mcpTool.Description, schemaHash)
+	// 3. Check if tool already exists for this role
+	existingTool, _ := store.GetRoleToolByIdentity(ctx, roleID, sanitizedName, schemaHash)
 
-	var discoveredToolID string
+	now := time.Now()
+
 	if existingTool != nil {
-		// Tool already exists
-		discoveredToolID = existingTool.ID
+		// Tool already exists for this role - update permission to ALLOWED
+		if existingTool.Status != domain.ToolStatusAllowed {
+			if err := store.SetRoleToolPermission(ctx, existingTool.ID, domain.ToolStatusAllowed, actorID, "", "Auto-approved from MCP tool permission"); err != nil {
+				return fmt.Errorf("failed to update tool permission: %w", err)
+			}
+		}
 		// Update last seen
-		if err := store.UpdateToolSeen(ctx, discoveredToolID); err != nil {
-			slog.Warn("Failed to update tool seen", "tool_id", discoveredToolID, "error", err)
+		if err := store.UpdateRoleToolSeen(ctx, existingTool.ID); err != nil {
+			slog.Warn("Failed to update tool seen", "tool_id", existingTool.ID, "error", err)
 		}
 	} else {
-		// 4. Create discovered tool
-		discoveredTool := &domain.DiscoveredTool{
-			ID:          uuid.New().String(),
-			Name:        sanitizedName,
-			Description: mcpTool.Description,
-			SchemaHash:  schemaHash,
-			Parameters:  mcpTool.InputSchema,
-			FirstSeenBy: actorID, // User who approved it
-			SeenCount:   1,
-			Category:    mcpTool.Category,
+		// 4. Create new role tool with ALLOWED status
+		roleTool := &domain.RoleTool{
+			ID:             uuid.New().String(),
+			RoleID:         roleID,
+			Name:           sanitizedName,
+			Description:    mcpTool.Description,
+			SchemaHash:     schemaHash,
+			Parameters:     mcpTool.InputSchema,
+			FirstSeenBy:    actorID,
+			SeenCount:      1,
+			Category:       mcpTool.Category,
+			Status:         domain.ToolStatusAllowed,
+			DecidedBy:      actorID,
+			DecidedAt:      &now,
+			DecisionReason: "Auto-approved from MCP tool permission",
 		}
 
-		if err := store.CreateDiscoveredTool(ctx, discoveredTool); err != nil {
-			// Might be a race condition - try to fetch again
-			existingTool, fetchErr := store.GetToolByIdentity(ctx, sanitizedName, mcpTool.Description, schemaHash)
-			if fetchErr != nil || existingTool == nil {
-				return fmt.Errorf("failed to create discovered tool: %w", err)
-			}
-			discoveredToolID = existingTool.ID
-		} else {
-			discoveredToolID = discoveredTool.ID
+		if err := store.CreateOrUpdateRoleTool(ctx, roleTool); err != nil {
+			return fmt.Errorf("failed to create role tool: %w", err)
 		}
+
+		slog.Info("Synced MCP tool to role tools",
+			"mcp_tool_id", mcpToolID,
+			"mcp_tool_name", sanitizedName,
+			"role_tool_id", roleTool.ID,
+			"role_id", roleID,
+		)
 	}
 
-	// 5. Set tool role permission to ALLOWED
-	now := time.Now()
-	permission := &domain.ToolRolePermission{
-		ID:             uuid.New().String(),
-		ToolID:         discoveredToolID,
-		RoleID:         roleID,
-		Status:         domain.ToolStatusAllowed,
-		DecidedBy:      actorID,
-		DecidedAt:      &now,
-		DecisionReason: "Auto-approved from MCP tool permission",
-	}
-
-	if err := store.CreateToolPermission(ctx, permission); err != nil {
-		return fmt.Errorf("failed to set tool permission: %w", err)
-	}
-
-	slog.Info("Synced MCP tool to discovered tools",
-		"mcp_tool_id", mcpToolID,
-		"mcp_tool_name", sanitizedName,
-		"discovered_tool_id", discoveredToolID,
-		"role_id", roleID,
-	)
-
-	// 6. Also ensure tool_search is allowed for this role
-	// This enables agents to use the search capability
+	// 5. Also ensure tool_search is allowed for this role
 	if err := r.ensureToolSearchAllowed(ctx, store, roleID, actorID); err != nil {
 		slog.Warn("Failed to ensure tool_search is allowed",
 			"role_id", roleID,
@@ -866,7 +852,7 @@ func (r *mutationResolver) syncMCPToolToDiscoveredTools(
 }
 
 // ensureToolSearchAllowed ensures the special tool_search tool is added as an allowed
-// discovered tool for the given role. This is called when any MCP tool is given
+// role tool for the given role. This is called when any MCP tool is given
 // ALLOW or SEARCH visibility so agents can use the search capability.
 func (r *mutationResolver) ensureToolSearchAllowed(
 	ctx context.Context,
@@ -897,65 +883,44 @@ func (r *mutationResolver) ensureToolSearchAllowed(
 	description := "Search for available tools across all connected MCP servers. Use this to discover capabilities before using specific tools."
 	schemaHash := policy.ComputeSchemaHash(toolSearchSchema)
 
-	// Check if tool_search already exists
-	existingTool, _ := store.GetToolByIdentity(ctx, "tool_search", description, schemaHash)
+	// Check if tool_search already exists for this role
+	existingTool, _ := store.GetRoleToolByIdentity(ctx, roleID, "tool_search", schemaHash)
 
-	var toolSearchID string
+	now := time.Now()
+
 	if existingTool != nil {
-		toolSearchID = existingTool.ID
-	} else {
-		// Create tool_search as a discovered tool
-		toolSearch := &domain.DiscoveredTool{
-			ID:          uuid.New().String(),
-			Name:        "tool_search",
-			Description: description,
-			SchemaHash:  schemaHash,
-			Parameters:  toolSearchSchema,
-			FirstSeenBy: actorID,
-			SeenCount:   1,
-			Category:    "search",
-		}
-
-		if err := store.CreateDiscoveredTool(ctx, toolSearch); err != nil {
-			// Might already exist due to race condition
-			existingTool, fetchErr := store.GetToolByIdentity(ctx, "tool_search", description, schemaHash)
-			if fetchErr != nil || existingTool == nil {
-				return fmt.Errorf("failed to create tool_search: %w", err)
+		// Already exists - ensure it's ALLOWED
+		if existingTool.Status != domain.ToolStatusAllowed {
+			if err := store.SetRoleToolPermission(ctx, existingTool.ID, domain.ToolStatusAllowed, actorID, "", "Auto-approved: enables MCP tool discovery via tool_search"); err != nil {
+				return fmt.Errorf("failed to update tool_search permission: %w", err)
 			}
-			toolSearchID = existingTool.ID
-		} else {
-			toolSearchID = toolSearch.ID
 		}
-	}
-
-	// Check if permission already exists
-	existingPerm, _ := store.GetToolPermission(ctx, toolSearchID, roleID)
-	if existingPerm != nil && existingPerm.Status == domain.ToolStatusAllowed {
-		// Already allowed, nothing to do
 		return nil
 	}
 
-	// Set permission to ALLOWED
-	now := time.Now()
-	permission := &domain.ToolRolePermission{
+	// Create tool_search as a role tool with ALLOWED status
+	toolSearch := &domain.RoleTool{
 		ID:             uuid.New().String(),
-		ToolID:         toolSearchID,
 		RoleID:         roleID,
+		Name:           "tool_search",
+		Description:    description,
+		SchemaHash:     schemaHash,
+		Parameters:     toolSearchSchema,
+		FirstSeenBy:    actorID,
+		SeenCount:      1,
+		Category:       "search",
 		Status:         domain.ToolStatusAllowed,
 		DecidedBy:      actorID,
 		DecidedAt:      &now,
 		DecisionReason: "Auto-approved: enables MCP tool discovery via tool_search",
 	}
 
-	if err := store.CreateToolPermission(ctx, permission); err != nil {
-		// Might already exist, which is fine
-		if !strings.Contains(err.Error(), "duplicate") && !strings.Contains(err.Error(), "unique") {
-			return fmt.Errorf("failed to set tool_search permission: %w", err)
-		}
+	if err := store.CreateOrUpdateRoleTool(ctx, toolSearch); err != nil {
+		return fmt.Errorf("failed to create tool_search: %w", err)
 	}
 
 	slog.Info("Ensured tool_search is allowed for role",
-		"tool_id", toolSearchID,
+		"tool_id", toolSearch.ID,
 		"role_id", roleID,
 	)
 

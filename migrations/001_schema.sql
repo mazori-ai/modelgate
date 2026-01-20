@@ -677,50 +677,47 @@ CREATE INDEX IF NOT EXISTS idx_cache_events_api_key ON cache_events(api_key_id);
 CREATE INDEX IF NOT EXISTS idx_cache_events_timestamp ON cache_events(timestamp);
 
 -- =============================================================================
--- Discovered Tools Table
--- Tools discovered from AI model requests (single-tenant)
+-- Role Tools Table
+-- Tools discovered from AI model requests, scoped to roles (single-tenant)
+-- Each role has its own set of discovered tools with inline permissions
 -- =============================================================================
-CREATE TABLE IF NOT EXISTS discovered_tools (
+CREATE TABLE IF NOT EXISTS role_tools (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    role_id UUID NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+    
+    -- Tool identity
     name VARCHAR(255) NOT NULL,
     description TEXT,
     schema_hash VARCHAR(64) NOT NULL,
     parameters JSONB DEFAULT '{}',
+    category VARCHAR(100),
+    
+    -- Usage tracking
     first_seen_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     last_seen_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    first_seen_by UUID,
+    first_seen_by UUID,  -- API Key ID that first used this tool
     seen_count INTEGER DEFAULT 1,
-    category VARCHAR(100),
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    UNIQUE(name, schema_hash)
-);
-
-CREATE INDEX IF NOT EXISTS idx_discovered_tools_name ON discovered_tools(name);
-CREATE INDEX IF NOT EXISTS idx_discovered_tools_schema_hash ON discovered_tools(schema_hash);
-CREATE INDEX IF NOT EXISTS idx_discovered_tools_category ON discovered_tools(category);
-
--- =============================================================================
--- Tool Role Permissions Table
--- Role-based permissions for discovered tools (single-tenant)
--- =============================================================================
-CREATE TABLE IF NOT EXISTS tool_role_permissions (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    tool_id UUID NOT NULL REFERENCES discovered_tools(id) ON DELETE CASCADE,
-    role_id UUID NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
-    status VARCHAR(20) NOT NULL DEFAULT 'PENDING',  -- ALLOWED, BLOCKED, PENDING
+    
+    -- Permission (inline, no separate table needed)
+    status VARCHAR(20) NOT NULL DEFAULT 'PENDING',  -- ALLOWED, DENIED, PENDING, REMOVED
     decided_by UUID,
     decided_by_email VARCHAR(255),
     decided_at TIMESTAMP WITH TIME ZONE,
     decision_reason TEXT,
+    
+    -- Timestamps
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    UNIQUE(tool_id, role_id)
+    
+    -- Each role has its own unique set of tools (same tool can exist in multiple roles)
+    UNIQUE(role_id, name, schema_hash)
 );
 
-CREATE INDEX IF NOT EXISTS idx_tool_role_permissions_tool ON tool_role_permissions(tool_id);
-CREATE INDEX IF NOT EXISTS idx_tool_role_permissions_role ON tool_role_permissions(role_id);
-CREATE INDEX IF NOT EXISTS idx_tool_role_permissions_status ON tool_role_permissions(status);
+CREATE INDEX IF NOT EXISTS idx_role_tools_role ON role_tools(role_id);
+CREATE INDEX IF NOT EXISTS idx_role_tools_name ON role_tools(name);
+CREATE INDEX IF NOT EXISTS idx_role_tools_schema_hash ON role_tools(schema_hash);
+CREATE INDEX IF NOT EXISTS idx_role_tools_category ON role_tools(category);
+CREATE INDEX IF NOT EXISTS idx_role_tools_status ON role_tools(status);
 
 -- =============================================================================
 -- Tool Execution Logs Table
@@ -728,7 +725,8 @@ CREATE INDEX IF NOT EXISTS idx_tool_role_permissions_status ON tool_role_permiss
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS tool_execution_logs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    tool_id UUID NOT NULL REFERENCES discovered_tools(id) ON DELETE CASCADE,
+    role_tool_id UUID REFERENCES role_tools(id) ON DELETE SET NULL,  -- Can be null if tool was deleted
+    tool_name VARCHAR(255) NOT NULL,  -- Store name for audit even if tool deleted
     role_id UUID,
     api_key_id UUID,
     request_id VARCHAR(100),
@@ -741,7 +739,8 @@ CREATE TABLE IF NOT EXISTS tool_execution_logs (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_tool_execution_logs_tool ON tool_execution_logs(tool_id);
+CREATE INDEX IF NOT EXISTS idx_tool_execution_logs_role_tool ON tool_execution_logs(role_tool_id);
+CREATE INDEX IF NOT EXISTS idx_tool_execution_logs_tool_name ON tool_execution_logs(tool_name);
 CREATE INDEX IF NOT EXISTS idx_tool_execution_logs_api_key ON tool_execution_logs(api_key_id);
 CREATE INDEX IF NOT EXISTS idx_tool_execution_logs_created ON tool_execution_logs(created_at);
 

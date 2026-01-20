@@ -535,10 +535,10 @@ func (s *Server) enforceToolPolicy(ctx context.Context, req *domain.ChatRequest,
 		}
 	}
 
-	// Discover tools and register them
-	discoveredTools, err := s.toolDiscoveryService.DiscoverToolsFromRequest(
+	// Discover tools and register them for this role
+	discoveredTools, err := s.toolDiscoveryService.DiscoverToolsForRole(
 		ctx,
-		auth.Tenant.ID,
+		auth.APIKey.RoleID,
 		auth.APIKey.ID,
 		req.Tools,
 		tenantStore,
@@ -595,11 +595,11 @@ func (s *Server) enforceToolPolicy(ctx context.Context, req *domain.ChatRequest,
 				// Log execution attempt as REMOVED
 				tenantStore.LogToolExecution(ctx, &domain.ToolExecutionLog{
 					ID:          uuid.New().String(),
-					ToolID:      t.ToolID,
+					RoleToolID:  t.ToolID,
+					ToolName:    t.ToolName,
 					RoleID:      auth.APIKey.RoleID,
 					APIKeyID:    auth.APIKey.ID,
 					RequestID:   req.RequestID,
-					ToolName:    t.ToolName,
 					Status:      "REMOVED",
 					BlockReason: t.Reason,
 					Model:       req.Model,
@@ -644,11 +644,11 @@ func (s *Server) enforceToolPolicy(ctx context.Context, req *domain.ChatRequest,
 				// Log execution attempt
 				tenantStore.LogToolExecution(ctx, &domain.ToolExecutionLog{
 					ID:          uuid.New().String(),
-					ToolID:      t.ToolID,
+					RoleToolID:  t.ToolID,
+					ToolName:    t.ToolName,
 					RoleID:      auth.APIKey.RoleID,
 					APIKeyID:    auth.APIKey.ID,
 					RequestID:   req.RequestID,
-					ToolName:    t.ToolName,
 					Status:      "BLOCKED",
 					BlockReason: t.Reason,
 					Model:       req.Model,
@@ -665,13 +665,13 @@ func (s *Server) enforceToolPolicy(ctx context.Context, req *domain.ChatRequest,
 		// Log allowed tool executions
 		for _, t := range permResult.AllowedTools() {
 			tenantStore.LogToolExecution(ctx, &domain.ToolExecutionLog{
-				ID:       uuid.New().String(),
-				ToolID:   t.ToolID,
-				RoleID:   auth.APIKey.RoleID,
-				APIKeyID: auth.APIKey.ID,
-				ToolName: t.ToolName,
-				Status:   "ALLOWED",
-				Model:    req.Model,
+				ID:         uuid.New().String(),
+				RoleToolID: t.ToolID,
+				ToolName:   t.ToolName,
+				RoleID:     auth.APIKey.RoleID,
+				APIKeyID:   auth.APIKey.ID,
+				Status:     "ALLOWED",
+				Model:      req.Model,
 			})
 		}
 	}

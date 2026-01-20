@@ -1635,10 +1635,10 @@ func (r *mutationResolver) SetMCPPermission(ctx context.Context, input model.Set
 		return nil, err
 	}
 
-	// Sync to discovered_tools if visibility is ALLOW or SEARCH
+	// Sync to role_tools if visibility is ALLOW or SEARCH
 	if perm.Visibility == domain.MCPVisibilityAllow || perm.Visibility == domain.MCPVisibilitySearch {
-		if err := r.syncMCPToolToDiscoveredTools(ctx, store, perm.RoleID, perm.ToolID, actorID); err != nil {
-			slog.Warn("Failed to sync MCP tool to discovered tools",
+		if err := r.syncMCPToolToRoleTools(ctx, store, perm.RoleID, perm.ToolID, actorID); err != nil {
+			slog.Warn("Failed to sync MCP tool to role_tools",
 				"tool_id", perm.ToolID,
 				"role_id", perm.RoleID,
 				"error", err,
@@ -1669,7 +1669,7 @@ func (r *mutationResolver) BulkSetMCPVisibility(ctx context.Context, roleID stri
 		return 0, err
 	}
 
-	// Sync to discovered_tools if visibility is ALLOW or SEARCH
+	// Sync to role_tools if visibility is ALLOW or SEARCH
 	if visibility == model.MCPToolVisibilityAllow || visibility == model.MCPToolVisibilitySearch {
 		// Get all tools for this server
 		tools, err := store.ListMCPTools(ctx, serverID)
@@ -1681,7 +1681,7 @@ func (r *mutationResolver) BulkSetMCPVisibility(ctx context.Context, roleID stri
 		} else {
 			// Sync each tool (don't fail bulk operation on sync errors)
 			for _, tool := range tools {
-				if err := r.syncMCPToolToDiscoveredTools(ctx, store, roleID, tool.ID, actorID); err != nil {
+				if err := r.syncMCPToolToRoleTools(ctx, store, roleID, tool.ID, actorID); err != nil {
 					slog.Warn("Failed to sync MCP tool in bulk operation",
 						"tool_id", tool.ID,
 						"tool_name", tool.Name,

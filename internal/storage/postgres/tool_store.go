@@ -4,31 +4,42 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"log/slog"
+	"fmt"
 	"time"
 
 	"modelgate/internal/domain"
 )
 
 // ============================================================================
-// Discovered Tools
+// Role Tools (unified tool discovery + permissions)
 // ============================================================================
 
-// CreateDiscoveredTool creates a new discovered tool
-func (s *TenantStore) CreateDiscoveredTool(ctx context.Context, tool *domain.DiscoveredTool) error {
+// CreateOrUpdateRoleTool creates or updates a tool for a specific role
+// Uses upsert on (role_id, name, schema_hash) to handle duplicates
+func (s *TenantStore) CreateOrUpdateRoleTool(ctx context.Context, tool *domain.RoleTool) error {
 	parametersJSON, err := json.Marshal(tool.Parameters)
 	if err != nil {
 		return err
 	}
 
+	// Use ON CONFLICT to handle duplicates - update if exists
 	query := `
-		INSERT INTO discovered_tools (
-			id, name, description, schema_hash, parameters,
-			first_seen_at, last_seen_at, first_seen_by, seen_count, category,
+		INSERT INTO role_tools (
+			id, role_id, name, description, schema_hash, parameters, category,
+			first_seen_at, last_seen_at, first_seen_by, seen_count,
+			status, decided_by, decided_by_email, decided_at, decision_reason,
 			created_at, updated_at
 		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
+			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18
 		)
+		ON CONFLICT (role_id, name, schema_hash) DO UPDATE SET
+			description = EXCLUDED.description,
+			parameters = EXCLUDED.parameters,
+			category = COALESCE(EXCLUDED.category, role_tools.category),
+			last_seen_at = EXCLUDED.last_seen_at,
+			seen_count = role_tools.seen_count + 1,
+			updated_at = EXCLUDED.updated_at
+		RETURNING id
 	`
 
 	now := time.Now()
@@ -41,70 +52,82 @@ func (s *TenantStore) CreateDiscoveredTool(ctx context.Context, tool *domain.Dis
 	if tool.SeenCount == 0 {
 		tool.SeenCount = 1
 	}
+	if tool.Status == "" {
+		tool.Status = domain.ToolStatusPending
+	}
 
-	_, err = s.db.ExecContext(ctx, query,
-		tool.ID, tool.Name, tool.Description, tool.SchemaHash, parametersJSON,
-		tool.FirstSeenAt, tool.LastSeenAt, nullString(tool.FirstSeenBy), tool.SeenCount, nullString(tool.Category),
-		now, now)
+	var actualID string
+	err = s.db.QueryRowContext(ctx, query,
+		tool.ID, tool.RoleID, tool.Name, tool.Description, tool.SchemaHash, parametersJSON, nullString(tool.Category),
+		tool.FirstSeenAt, tool.LastSeenAt, nullString(tool.FirstSeenBy), tool.SeenCount,
+		tool.Status, nullString(tool.DecidedBy), nullString(tool.DecidedByEmail), tool.DecidedAt, nullString(tool.DecisionReason),
+		now, now,
+	).Scan(&actualID)
 
-	return err
+	if err != nil {
+		return err
+	}
+
+	// Update the tool ID with actual ID (in case of conflict, existing ID is returned)
+	tool.ID = actualID
+	return nil
 }
 
-// GetDiscoveredTool gets a discovered tool by ID
-func (s *TenantStore) GetDiscoveredTool(ctx context.Context, id string) (*domain.DiscoveredTool, error) {
+// GetRoleTool gets a role tool by ID
+func (s *TenantStore) GetRoleTool(ctx context.Context, id string) (*domain.RoleTool, error) {
 	query := `
-		SELECT id, name, description, schema_hash, parameters,
-			first_seen_at, last_seen_at, first_seen_by, seen_count, category,
+		SELECT id, role_id, name, description, schema_hash, parameters, category,
+			first_seen_at, last_seen_at, first_seen_by, seen_count,
+			status, decided_by, decided_by_email, decided_at, decision_reason,
 			created_at, updated_at
-		FROM discovered_tools
+		FROM role_tools
 		WHERE id = $1
 	`
-
-	var tool domain.DiscoveredTool
-	var parametersJSON []byte
-	var firstSeenBy, category sql.NullString
-
-	err := s.db.QueryRowContext(ctx, query, id).Scan(
-		&tool.ID, &tool.Name, &tool.Description, &tool.SchemaHash, &parametersJSON,
-		&tool.FirstSeenAt, &tool.LastSeenAt, &firstSeenBy, &tool.SeenCount, &category,
-		&tool.CreatedAt, &tool.UpdatedAt)
-
-	if err == sql.ErrNoRows {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-
-	json.Unmarshal(parametersJSON, &tool.Parameters)
-	if firstSeenBy.Valid {
-		tool.FirstSeenBy = firstSeenBy.String
-	}
-	if category.Valid {
-		tool.Category = category.String
-	}
-
-	return &tool, nil
+	return s.scanRoleTool(s.db.QueryRowContext(ctx, query, id))
 }
 
-// GetToolByIdentity gets a tool by its unique identity (name + description + schema_hash)
-func (s *TenantStore) GetToolByIdentity(ctx context.Context, name, description, schemaHash string) (*domain.DiscoveredTool, error) {
+// GetRoleToolByIdentity gets a tool by its unique identity within a role
+func (s *TenantStore) GetRoleToolByIdentity(ctx context.Context, roleID, name, schemaHash string) (*domain.RoleTool, error) {
 	query := `
-		SELECT id, name, description, schema_hash, parameters,
-			first_seen_at, last_seen_at, first_seen_by, seen_count, category,
+		SELECT id, role_id, name, description, schema_hash, parameters, category,
+			first_seen_at, last_seen_at, first_seen_by, seen_count,
+			status, decided_by, decided_by_email, decided_at, decision_reason,
 			created_at, updated_at
-		FROM discovered_tools
-		WHERE name = $1 AND description = $2 AND schema_hash = $3
+		FROM role_tools
+		WHERE role_id = $1 AND name = $2 AND schema_hash = $3
 	`
+	return s.scanRoleTool(s.db.QueryRowContext(ctx, query, roleID, name, schemaHash))
+}
 
-	var tool domain.DiscoveredTool
+// GetRoleToolByName gets a tool by name within a role (ignoring schema hash)
+// Returns the most recently seen variant if multiple exist
+func (s *TenantStore) GetRoleToolByName(ctx context.Context, roleID, name string) (*domain.RoleTool, error) {
+	query := `
+		SELECT id, role_id, name, description, schema_hash, parameters, category,
+			first_seen_at, last_seen_at, first_seen_by, seen_count,
+			status, decided_by, decided_by_email, decided_at, decision_reason,
+			created_at, updated_at
+		FROM role_tools
+		WHERE role_id = $1 AND name = $2
+		ORDER BY last_seen_at DESC
+		LIMIT 1
+	`
+	return s.scanRoleTool(s.db.QueryRowContext(ctx, query, roleID, name))
+}
+
+// scanRoleTool scans a single row into a RoleTool
+func (s *TenantStore) scanRoleTool(row *sql.Row) (*domain.RoleTool, error) {
+	var tool domain.RoleTool
 	var parametersJSON []byte
-	var firstSeenBy, category sql.NullString
+	var category, firstSeenBy, decidedBy, decidedByEmail, decisionReason sql.NullString
+	var decidedAt sql.NullTime
 
-	err := s.db.QueryRowContext(ctx, query, name, description, schemaHash).Scan(
-		&tool.ID, &tool.Name, &tool.Description, &tool.SchemaHash, &parametersJSON,
-		&tool.FirstSeenAt, &tool.LastSeenAt, &firstSeenBy, &tool.SeenCount, &category,
-		&tool.CreatedAt, &tool.UpdatedAt)
+	err := row.Scan(
+		&tool.ID, &tool.RoleID, &tool.Name, &tool.Description, &tool.SchemaHash, &parametersJSON, &category,
+		&tool.FirstSeenAt, &tool.LastSeenAt, &firstSeenBy, &tool.SeenCount,
+		&tool.Status, &decidedBy, &decidedByEmail, &decidedAt, &decisionReason,
+		&tool.CreatedAt, &tool.UpdatedAt,
+	)
 
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -114,20 +137,32 @@ func (s *TenantStore) GetToolByIdentity(ctx context.Context, name, description, 
 	}
 
 	json.Unmarshal(parametersJSON, &tool.Parameters)
+	if category.Valid {
+		tool.Category = category.String
+	}
 	if firstSeenBy.Valid {
 		tool.FirstSeenBy = firstSeenBy.String
 	}
-	if category.Valid {
-		tool.Category = category.String
+	if decidedBy.Valid {
+		tool.DecidedBy = decidedBy.String
+	}
+	if decidedByEmail.Valid {
+		tool.DecidedByEmail = decidedByEmail.String
+	}
+	if decidedAt.Valid {
+		tool.DecidedAt = &decidedAt.Time
+	}
+	if decisionReason.Valid {
+		tool.DecisionReason = decisionReason.String
 	}
 
 	return &tool, nil
 }
 
-// UpdateToolSeen updates the last_seen_at and increments seen_count
-func (s *TenantStore) UpdateToolSeen(ctx context.Context, id string) error {
+// UpdateRoleToolSeen updates the last_seen_at and increments seen_count
+func (s *TenantStore) UpdateRoleToolSeen(ctx context.Context, id string) error {
 	query := `
-		UPDATE discovered_tools
+		UPDATE role_tools
 		SET last_seen_at = $2, seen_count = seen_count + 1, updated_at = $2
 		WHERE id = $1
 	`
@@ -135,67 +170,47 @@ func (s *TenantStore) UpdateToolSeen(ctx context.Context, id string) error {
 	return err
 }
 
-// ListDiscoveredTools lists discovered tools with filtering
-func (s *TenantStore) ListDiscoveredTools(ctx context.Context, filter domain.ToolFilter, limit, offset int) ([]*domain.DiscoveredTool, int, error) {
-	// Build query with filters
-	query := `
-		SELECT dt.id, dt.name, dt.description, dt.schema_hash, dt.parameters,
-			dt.first_seen_at, dt.last_seen_at, dt.first_seen_by, dt.seen_count, dt.category,
-			dt.created_at, dt.updated_at
-		FROM discovered_tools dt
-	`
-
-	countQuery := `SELECT COUNT(*) FROM discovered_tools dt`
-
-	whereClause := ` WHERE 1=1`
-	args := []interface{}{}
-	argIdx := 1
+// ListRoleTools lists tools for a specific role with filtering
+func (s *TenantStore) ListRoleTools(ctx context.Context, roleID string, filter domain.ToolFilter, limit, offset int) ([]*domain.RoleTool, int, error) {
+	whereClause := "WHERE role_id = $1"
+	args := []interface{}{roleID}
+	argIdx := 2
 
 	if filter.Name != "" {
-		whereClause += ` AND dt.name ILIKE $` + string(rune('0'+argIdx))
+		whereClause += fmt.Sprintf(" AND name ILIKE $%d", argIdx)
 		args = append(args, "%"+filter.Name+"%")
 		argIdx++
 	}
 
 	if filter.Category != "" {
-		whereClause += ` AND dt.category = $` + string(rune('0'+argIdx))
+		whereClause += fmt.Sprintf(" AND category = $%d", argIdx)
 		args = append(args, filter.Category)
 		argIdx++
 	}
 
-	if filter.RoleID != "" && filter.Status != "" {
-		// Join with permissions table to filter by status
-		query = `
-			SELECT dt.id, dt.name, dt.description, dt.schema_hash, dt.parameters,
-				dt.first_seen_at, dt.last_seen_at, dt.first_seen_by, dt.seen_count, dt.category,
-				dt.created_at, dt.updated_at
-			FROM discovered_tools dt
-			LEFT JOIN tool_role_permissions trp ON dt.id = trp.tool_id AND trp.role_id = $` + string(rune('0'+argIdx))
-
-		countQuery = `SELECT COUNT(*) FROM discovered_tools dt
-			LEFT JOIN tool_role_permissions trp ON dt.id = trp.tool_id AND trp.role_id = $` + string(rune('0'+argIdx))
-
-		args = append(args, filter.RoleID)
+	if filter.Status != "" {
+		whereClause += fmt.Sprintf(" AND status = $%d", argIdx)
+		args = append(args, string(filter.Status))
 		argIdx++
-
-		if filter.Status == domain.ToolStatusPending {
-			whereClause += ` AND (trp.status IS NULL OR trp.status = 'PENDING')`
-		} else {
-			whereClause += ` AND trp.status = $` + string(rune('0'+argIdx))
-			args = append(args, string(filter.Status))
-			argIdx++
-		}
 	}
 
 	// Count total
+	countQuery := "SELECT COUNT(*) FROM role_tools " + whereClause
 	var total int
-	err := s.db.QueryRowContext(ctx, countQuery+whereClause, args...).Scan(&total)
+	err := s.db.QueryRowContext(ctx, countQuery, args...).Scan(&total)
 	if err != nil {
 		return nil, 0, err
 	}
 
 	// Get paginated results
-	query += whereClause + ` ORDER BY dt.last_seen_at DESC LIMIT $` + string(rune('0'+argIdx)) + ` OFFSET $` + string(rune('0'+argIdx+1))
+	query := `
+		SELECT id, role_id, name, description, schema_hash, parameters, category,
+			first_seen_at, last_seen_at, first_seen_by, seen_count,
+			status, decided_by, decided_by_email, decided_at, decision_reason,
+			created_at, updated_at
+		FROM role_tools
+	` + whereClause + fmt.Sprintf(" ORDER BY last_seen_at DESC LIMIT $%d OFFSET $%d", argIdx, argIdx+1)
+
 	args = append(args, limit, offset)
 
 	rows, err := s.db.QueryContext(ctx, query, args...)
@@ -204,26 +219,41 @@ func (s *TenantStore) ListDiscoveredTools(ctx context.Context, filter domain.Too
 	}
 	defer rows.Close()
 
-	var tools []*domain.DiscoveredTool
+	var tools []*domain.RoleTool
 	for rows.Next() {
-		var tool domain.DiscoveredTool
+		var tool domain.RoleTool
 		var parametersJSON []byte
-		var firstSeenBy, category sql.NullString
+		var category, firstSeenBy, decidedBy, decidedByEmail, decisionReason sql.NullString
+		var decidedAt sql.NullTime
 
 		err := rows.Scan(
-			&tool.ID, &tool.Name, &tool.Description, &tool.SchemaHash, &parametersJSON,
-			&tool.FirstSeenAt, &tool.LastSeenAt, &firstSeenBy, &tool.SeenCount, &category,
-			&tool.CreatedAt, &tool.UpdatedAt)
+			&tool.ID, &tool.RoleID, &tool.Name, &tool.Description, &tool.SchemaHash, &parametersJSON, &category,
+			&tool.FirstSeenAt, &tool.LastSeenAt, &firstSeenBy, &tool.SeenCount,
+			&tool.Status, &decidedBy, &decidedByEmail, &decidedAt, &decisionReason,
+			&tool.CreatedAt, &tool.UpdatedAt,
+		)
 		if err != nil {
 			return nil, 0, err
 		}
 
 		json.Unmarshal(parametersJSON, &tool.Parameters)
+		if category.Valid {
+			tool.Category = category.String
+		}
 		if firstSeenBy.Valid {
 			tool.FirstSeenBy = firstSeenBy.String
 		}
-		if category.Valid {
-			tool.Category = category.String
+		if decidedBy.Valid {
+			tool.DecidedBy = decidedBy.String
+		}
+		if decidedByEmail.Valid {
+			tool.DecidedByEmail = decidedByEmail.String
+		}
+		if decidedAt.Valid {
+			tool.DecidedAt = &decidedAt.Time
+		}
+		if decisionReason.Valid {
+			tool.DecisionReason = decisionReason.String
 		}
 
 		tools = append(tools, &tool)
@@ -232,323 +262,40 @@ func (s *TenantStore) ListDiscoveredTools(ctx context.Context, filter domain.Too
 	return tools, total, nil
 }
 
-// DeleteDiscoveredTool deletes a discovered tool
-func (s *TenantStore) DeleteDiscoveredTool(ctx context.Context, id string) error {
-	_, err := s.db.ExecContext(ctx, "DELETE FROM discovered_tools WHERE id = $1", id)
+// DeleteRoleTool deletes a role tool
+func (s *TenantStore) DeleteRoleTool(ctx context.Context, id string) error {
+	_, err := s.db.ExecContext(ctx, "DELETE FROM role_tools WHERE id = $1", id)
 	return err
 }
 
 // ============================================================================
-// Tool Role Permissions
+// Role Tool Permissions (inline updates)
 // ============================================================================
 
-// CreateToolPermission creates a new tool-role permission
-func (s *TenantStore) CreateToolPermission(ctx context.Context, perm *domain.ToolRolePermission) error {
-	query := `
-		INSERT INTO tool_role_permissions (
-			id, tool_id, role_id, status,
-			decided_by, decided_by_email, decided_at, decision_reason,
-			created_at, updated_at
-		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10
-		)
-		ON CONFLICT (tool_id, role_id) DO UPDATE SET
-			status = EXCLUDED.status,
-			decided_by = EXCLUDED.decided_by,
-			decided_by_email = EXCLUDED.decided_by_email,
-			decided_at = EXCLUDED.decided_at,
-			decision_reason = EXCLUDED.decision_reason,
-			updated_at = EXCLUDED.updated_at
-	`
-
+// SetRoleToolPermission updates the permission status for a role tool
+func (s *TenantStore) SetRoleToolPermission(ctx context.Context, id string, status domain.ToolPermissionStatus, decidedBy, decidedByEmail, reason string) error {
 	now := time.Now()
-	_, err := s.db.ExecContext(ctx, query,
-		perm.ID, perm.ToolID, perm.RoleID, perm.Status,
-		nullString(perm.DecidedBy), nullString(perm.DecidedByEmail), perm.DecidedAt, nullString(perm.DecisionReason),
-		now, now)
-
+	query := `
+		UPDATE role_tools
+		SET status = $2, decided_by = $3, decided_by_email = $4, decided_at = $5, decision_reason = $6, updated_at = $5
+		WHERE id = $1
+	`
+	_, err := s.db.ExecContext(ctx, query, id, status, nullString(decidedBy), nullString(decidedByEmail), now, nullString(reason))
 	return err
 }
 
-// GetToolPermission gets the permission for a tool-role combination
-// First tries to find an exact tool_id match, then falls back to name-based matching
-// This allows a single permission (e.g., "REMOVED") to apply to all variants of a tool
-func (s *TenantStore) GetToolPermission(ctx context.Context, toolID, roleID string) (*domain.ToolRolePermission, error) {
-	slog.Info("GetToolPermission called", "tool_id", toolID, "role_id", roleID)
-
-	// First try exact tool_id match
-	query := `
-		SELECT id, tool_id, role_id, status,
-			decided_by, decided_by_email, decided_at, decision_reason,
-			created_at, updated_at
-		FROM tool_role_permissions
-		WHERE tool_id = $1 AND role_id = $2
-	`
-
-	var perm domain.ToolRolePermission
-	var decidedBy, decidedByEmail, decisionReason sql.NullString
-	var decidedAt sql.NullTime
-
-	err := s.db.QueryRowContext(ctx, query, toolID, roleID).Scan(
-		&perm.ID, &perm.ToolID, &perm.RoleID, &perm.Status,
-		&decidedBy, &decidedByEmail, &decidedAt, &decisionReason,
-		&perm.CreatedAt, &perm.UpdatedAt)
-
-	if err == sql.ErrNoRows {
-		slog.Info("No exact permission match, falling back to name-based lookup", "tool_id", toolID, "role_id", roleID)
-		// No exact match - try to find a permission for ANY tool with the same name
-		// This allows setting a permission once (e.g., REMOVED) that applies to all variants
-		return s.getToolPermissionByName(ctx, toolID, roleID)
-	}
-	if err != nil {
-		slog.Error("Error getting tool permission", "tool_id", toolID, "role_id", roleID, "error", err)
-		return nil, err
-	}
-
-	slog.Info("Found exact permission match", "tool_id", toolID, "role_id", roleID, "status", perm.Status)
-
-	if decidedBy.Valid {
-		perm.DecidedBy = decidedBy.String
-	}
-	if decidedByEmail.Valid {
-		perm.DecidedByEmail = decidedByEmail.String
-	}
-	if decidedAt.Valid {
-		perm.DecidedAt = &decidedAt.Time
-	}
-	if decisionReason.Valid {
-		perm.DecisionReason = decisionReason.String
-	}
-
-	return &perm, nil
-}
-
-// getToolPermissionByName looks up a permission by tool name for a role
-// This allows a permission set on one variant of a tool to apply to all variants with the same name
-func (s *TenantStore) getToolPermissionByName(ctx context.Context, toolID, roleID string) (*domain.ToolRolePermission, error) {
-	// First get the tool name for this tool ID
-	var toolName string
-	err := s.db.QueryRowContext(ctx,
-		"SELECT name FROM discovered_tools WHERE id = $1", toolID).Scan(&toolName)
-	if err != nil {
-		// Tool not found, return nil
-		return nil, nil
-	}
-
-	// Look for any permission for a tool with this name and role
-	// Prefer REMOVED or DENIED status (more restrictive) if multiple exist
-	query := `
-		SELECT trp.id, trp.tool_id, trp.role_id, trp.status,
-			trp.decided_by, trp.decided_by_email, trp.decided_at, trp.decision_reason,
-			trp.created_at, trp.updated_at
-		FROM tool_role_permissions trp
-		JOIN discovered_tools dt ON trp.tool_id = dt.id
-		WHERE dt.name = $1 AND trp.role_id = $2
-		ORDER BY 
-			CASE trp.status 
-				WHEN 'REMOVED' THEN 1
-				WHEN 'DENIED' THEN 2
-				WHEN 'ALLOWED' THEN 3
-				ELSE 4 
-			END
-		LIMIT 1
-	`
-
-	var perm domain.ToolRolePermission
-	var decidedBy, decidedByEmail, decisionReason sql.NullString
-	var decidedAt sql.NullTime
-
-	err = s.db.QueryRowContext(ctx, query, toolName, roleID).Scan(
-		&perm.ID, &perm.ToolID, &perm.RoleID, &perm.Status,
-		&decidedBy, &decidedByEmail, &decidedAt, &decisionReason,
-		&perm.CreatedAt, &perm.UpdatedAt)
-
-	if err == sql.ErrNoRows {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-
-	if decidedBy.Valid {
-		perm.DecidedBy = decidedBy.String
-	}
-	if decidedByEmail.Valid {
-		perm.DecidedByEmail = decidedByEmail.String
-	}
-	if decidedAt.Valid {
-		perm.DecidedAt = &decidedAt.Time
-	}
-	if decisionReason.Valid {
-		perm.DecisionReason = decisionReason.String
-	}
-
-	return &perm, nil
-}
-
-// UpdateToolPermission updates a tool-role permission
-func (s *TenantStore) UpdateToolPermission(ctx context.Context, perm *domain.ToolRolePermission) error {
-	query := `
-		UPDATE tool_role_permissions
-		SET status = $3, decided_by = $4, decided_by_email = $5, decided_at = $6, decision_reason = $7, updated_at = $8
-		WHERE tool_id = $1 AND role_id = $2
-	`
-
-	_, err := s.db.ExecContext(ctx, query,
-		perm.ToolID, perm.RoleID, perm.Status,
-		nullString(perm.DecidedBy), nullString(perm.DecidedByEmail), perm.DecidedAt, nullString(perm.DecisionReason),
-		time.Now())
-
-	return err
-}
-
-// ListToolPermissions lists all permissions for a role
-func (s *TenantStore) ListToolPermissions(ctx context.Context, roleID string) ([]*domain.ToolRolePermission, error) {
-	query := `
-		SELECT trp.id, trp.tool_id, trp.role_id, trp.status,
-			trp.decided_by, trp.decided_by_email, trp.decided_at, trp.decision_reason,
-			trp.created_at, trp.updated_at,
-			dt.id, dt.name, dt.description, dt.schema_hash, dt.parameters,
-			dt.first_seen_at, dt.last_seen_at, dt.first_seen_by, dt.seen_count, dt.category
-		FROM tool_role_permissions trp
-		JOIN discovered_tools dt ON trp.tool_id = dt.id
-		WHERE trp.role_id = $1
-		ORDER BY dt.name
-	`
-
-	rows, err := s.db.QueryContext(ctx, query, roleID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var perms []*domain.ToolRolePermission
-	for rows.Next() {
-		var perm domain.ToolRolePermission
-		var tool domain.DiscoveredTool
-		var decidedBy, decidedByEmail, decisionReason sql.NullString
-		var decidedAt sql.NullTime
-		var parametersJSON []byte
-		var firstSeenBy, category sql.NullString
-
-		err := rows.Scan(
-			&perm.ID, &perm.ToolID, &perm.RoleID, &perm.Status,
-			&decidedBy, &decidedByEmail, &decidedAt, &decisionReason,
-			&perm.CreatedAt, &perm.UpdatedAt,
-			&tool.ID, &tool.Name, &tool.Description, &tool.SchemaHash, &parametersJSON,
-			&tool.FirstSeenAt, &tool.LastSeenAt, &firstSeenBy, &tool.SeenCount, &category)
-		if err != nil {
-			return nil, err
-		}
-
-		if decidedBy.Valid {
-			perm.DecidedBy = decidedBy.String
-		}
-		if decidedByEmail.Valid {
-			perm.DecidedByEmail = decidedByEmail.String
-		}
-		if decidedAt.Valid {
-			perm.DecidedAt = &decidedAt.Time
-		}
-		if decisionReason.Valid {
-			perm.DecisionReason = decisionReason.String
-		}
-
-		json.Unmarshal(parametersJSON, &tool.Parameters)
-		if firstSeenBy.Valid {
-			tool.FirstSeenBy = firstSeenBy.String
-		}
-		if category.Valid {
-			tool.Category = category.String
-		}
-
-		perm.Tool = &tool
-		perms = append(perms, &perm)
-	}
-
-	return perms, nil
-}
-
-// ListPendingTools lists all tools that don't have permissions set for any role (pending review)
-func (s *TenantStore) ListPendingTools(ctx context.Context) ([]*domain.DiscoveredTool, error) {
-	query := `
-		SELECT dt.id, dt.name, dt.description, dt.schema_hash, dt.parameters,
-			dt.first_seen_at, dt.last_seen_at, dt.first_seen_by, dt.seen_count, dt.category,
-			dt.created_at, dt.updated_at
-		FROM discovered_tools dt
-		WHERE NOT EXISTS (
-			SELECT 1 FROM tool_role_permissions trp
-			WHERE trp.tool_id = dt.id AND trp.status != 'PENDING'
-		)
-		ORDER BY dt.last_seen_at DESC
-	`
-
-	rows, err := s.db.QueryContext(ctx, query)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var tools []*domain.DiscoveredTool
-	for rows.Next() {
-		var tool domain.DiscoveredTool
-		var parametersJSON []byte
-		var firstSeenBy, category sql.NullString
-
-		err := rows.Scan(
-			&tool.ID, &tool.Name, &tool.Description, &tool.SchemaHash, &parametersJSON,
-			&tool.FirstSeenAt, &tool.LastSeenAt, &firstSeenBy, &tool.SeenCount, &category,
-			&tool.CreatedAt, &tool.UpdatedAt)
-		if err != nil {
-			return nil, err
-		}
-
-		json.Unmarshal(parametersJSON, &tool.Parameters)
-		if firstSeenBy.Valid {
-			tool.FirstSeenBy = firstSeenBy.String
-		}
-		if category.Valid {
-			tool.Category = category.String
-		}
-
-		tools = append(tools, &tool)
-	}
-
-	return tools, nil
-}
-
-// BulkUpdatePermissions sets permissions for all tools for a role
-func (s *TenantStore) BulkUpdatePermissions(ctx context.Context, roleID string, status domain.ToolPermissionStatus, decidedBy, decidedByEmail string) (int, error) {
+// BulkSetRoleToolPermissions sets permissions for all pending tools for a role
+func (s *TenantStore) BulkSetRoleToolPermissions(ctx context.Context, roleID string, status domain.ToolPermissionStatus, decidedBy, decidedByEmail string) (int, error) {
 	now := time.Now()
-
-	// First, insert permissions for tools that don't have any
-	insertQuery := `
-		INSERT INTO tool_role_permissions (id, tool_id, role_id, status, decided_by, decided_by_email, decided_at, created_at, updated_at)
-		SELECT gen_random_uuid(), dt.id, $1, $2, $3, $4, $5, $5, $5
-		FROM discovered_tools dt
-		WHERE NOT EXISTS (
-			SELECT 1 FROM tool_role_permissions trp
-			WHERE trp.tool_id = dt.id AND trp.role_id = $1
-		)
-	`
-
-	_, err := s.db.ExecContext(ctx, insertQuery, roleID, status, nullString(decidedBy), nullString(decidedByEmail), now)
-	if err != nil {
-		return 0, err
-	}
-
-	// Then update existing pending permissions
-	updateQuery := `
-		UPDATE tool_role_permissions
+	query := `
+		UPDATE role_tools
 		SET status = $2, decided_by = $3, decided_by_email = $4, decided_at = $5, updated_at = $5
 		WHERE role_id = $1 AND status = 'PENDING'
 	`
-
-	result, err := s.db.ExecContext(ctx, updateQuery, roleID, status, nullString(decidedBy), nullString(decidedByEmail), now)
+	result, err := s.db.ExecContext(ctx, query, roleID, status, nullString(decidedBy), nullString(decidedByEmail), now)
 	if err != nil {
 		return 0, err
 	}
-
 	count, _ := result.RowsAffected()
 	return int(count), nil
 }
@@ -560,12 +307,11 @@ func (s *TenantStore) BulkUpdatePermissions(ctx context.Context, roleID string, 
 // LogToolExecution logs a tool call attempt
 func (s *TenantStore) LogToolExecution(ctx context.Context, log *domain.ToolExecutionLog) error {
 	inputParamsJSON, _ := json.Marshal(log.ToolArguments)
-	outputResultJSON := []byte("{}")
 
 	query := `
 		INSERT INTO tool_execution_logs (
-			id, tool_id, role_id, api_key_id,
-			request_id, input_params, output_result, status, error_message,
+			id, role_tool_id, tool_name, role_id, api_key_id,
+			request_id, input_params, status, error_message,
 			duration_ms, token_count, created_at
 		) VALUES (
 			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
@@ -577,70 +323,53 @@ func (s *TenantStore) LogToolExecution(ctx context.Context, log *domain.ToolExec
 		log.ExecutedAt = now
 	}
 
-	// Map status - "blocked" becomes error_message
-	status := log.Status
-	errorMessage := log.BlockReason
-
 	_, err := s.db.ExecContext(ctx, query,
-		log.ID, log.ToolID, log.RoleID, nullString(log.APIKeyID),
-		nullString(log.RequestID), inputParamsJSON, outputResultJSON, status, nullString(errorMessage),
-		0, 0, log.ExecutedAt)
+		log.ID, nullString(log.RoleToolID), log.ToolName, log.RoleID, nullString(log.APIKeyID),
+		nullString(log.RequestID), inputParamsJSON, log.Status, nullString(log.BlockReason),
+		0, 0, log.ExecutedAt,
+	)
 
 	return err
 }
 
 // ListToolExecutionLogs lists tool execution logs with filtering
 func (s *TenantStore) ListToolExecutionLogs(ctx context.Context, filter domain.ToolLogFilter, limit, offset int) ([]*domain.ToolExecutionLog, int, error) {
-	query := `
-		SELECT tel.id, tel.tool_id, tel.role_id, tel.api_key_id,
-			tel.request_id, tel.input_params, tel.status, tel.error_message,
-			tel.duration_ms, tel.created_at, dt.name as tool_name
-		FROM tool_execution_logs tel
-		LEFT JOIN discovered_tools dt ON tel.tool_id = dt.id
-		WHERE 1=1
-	`
-
-	countQuery := `SELECT COUNT(*) FROM tool_execution_logs tel WHERE 1=1`
-
+	whereClause := "WHERE 1=1"
 	args := []interface{}{}
 	argIdx := 1
 
 	if filter.ToolID != "" {
-		query += ` AND tel.tool_id = $` + string(rune('0'+argIdx))
-		countQuery += ` AND tel.tool_id = $` + string(rune('0'+argIdx))
+		whereClause += fmt.Sprintf(" AND role_tool_id = $%d", argIdx)
 		args = append(args, filter.ToolID)
 		argIdx++
 	}
 
 	if filter.RoleID != "" {
-		query += ` AND tel.role_id = $` + string(rune('0'+argIdx))
-		countQuery += ` AND tel.role_id = $` + string(rune('0'+argIdx))
+		whereClause += fmt.Sprintf(" AND role_id = $%d", argIdx)
 		args = append(args, filter.RoleID)
 		argIdx++
 	}
 
 	if filter.Status != "" {
-		query += ` AND tel.status = $` + string(rune('0'+argIdx))
-		countQuery += ` AND tel.status = $` + string(rune('0'+argIdx))
+		whereClause += fmt.Sprintf(" AND status = $%d", argIdx)
 		args = append(args, filter.Status)
 		argIdx++
 	}
 
 	if !filter.StartTime.IsZero() {
-		query += ` AND tel.created_at >= $` + string(rune('0'+argIdx))
-		countQuery += ` AND tel.created_at >= $` + string(rune('0'+argIdx))
+		whereClause += fmt.Sprintf(" AND created_at >= $%d", argIdx)
 		args = append(args, filter.StartTime)
 		argIdx++
 	}
 
 	if !filter.EndTime.IsZero() {
-		query += ` AND tel.created_at <= $` + string(rune('0'+argIdx))
-		countQuery += ` AND tel.created_at <= $` + string(rune('0'+argIdx))
+		whereClause += fmt.Sprintf(" AND created_at <= $%d", argIdx)
 		args = append(args, filter.EndTime)
 		argIdx++
 	}
 
 	// Count total
+	countQuery := "SELECT COUNT(*) FROM tool_execution_logs " + whereClause
 	var total int
 	err := s.db.QueryRowContext(ctx, countQuery, args...).Scan(&total)
 	if err != nil {
@@ -648,7 +377,12 @@ func (s *TenantStore) ListToolExecutionLogs(ctx context.Context, filter domain.T
 	}
 
 	// Get paginated results
-	query += ` ORDER BY tel.created_at DESC LIMIT $` + string(rune('0'+argIdx)) + ` OFFSET $` + string(rune('0'+argIdx+1))
+	query := `
+		SELECT id, role_tool_id, tool_name, role_id, api_key_id,
+			request_id, input_params, status, error_message, created_at
+		FROM tool_execution_logs
+	` + whereClause + fmt.Sprintf(" ORDER BY created_at DESC LIMIT $%d OFFSET $%d", argIdx, argIdx+1)
+
 	args = append(args, limit, offset)
 
 	rows, err := s.db.QueryContext(ctx, query, args...)
@@ -660,18 +394,20 @@ func (s *TenantStore) ListToolExecutionLogs(ctx context.Context, filter domain.T
 	var logs []*domain.ToolExecutionLog
 	for rows.Next() {
 		var log domain.ToolExecutionLog
-		var apiKeyID, requestID, errorMessage, toolName sql.NullString
+		var roleToolID, apiKeyID, requestID, errorMessage sql.NullString
 		var inputParamsJSON []byte
-		var durationMs sql.NullInt64
 
 		err := rows.Scan(
-			&log.ID, &log.ToolID, &log.RoleID, &apiKeyID,
-			&requestID, &inputParamsJSON, &log.Status, &errorMessage,
-			&durationMs, &log.ExecutedAt, &toolName)
+			&log.ID, &roleToolID, &log.ToolName, &log.RoleID, &apiKeyID,
+			&requestID, &inputParamsJSON, &log.Status, &errorMessage, &log.ExecutedAt,
+		)
 		if err != nil {
 			return nil, 0, err
 		}
 
+		if roleToolID.Valid {
+			log.RoleToolID = roleToolID.String
+		}
 		if apiKeyID.Valid {
 			log.APIKeyID = apiKeyID.String
 		}
@@ -681,15 +417,170 @@ func (s *TenantStore) ListToolExecutionLogs(ctx context.Context, filter domain.T
 		if errorMessage.Valid {
 			log.BlockReason = errorMessage.String
 		}
-		if toolName.Valid {
-			log.ToolName = toolName.String
-		}
 		json.Unmarshal(inputParamsJSON, &log.ToolArguments)
 
 		logs = append(logs, &log)
 	}
 
 	return logs, total, nil
+}
+
+// ============================================================================
+// Legacy Compatibility Functions (deprecated, for gradual migration)
+// ============================================================================
+
+// GetDiscoveredTool is deprecated - use GetRoleTool instead
+func (s *TenantStore) GetDiscoveredTool(ctx context.Context, id string) (*domain.RoleTool, error) {
+	return s.GetRoleTool(ctx, id)
+}
+
+// CreateDiscoveredTool is deprecated - use CreateOrUpdateRoleTool instead
+func (s *TenantStore) CreateDiscoveredTool(ctx context.Context, tool *domain.RoleTool) error {
+	return s.CreateOrUpdateRoleTool(ctx, tool)
+}
+
+// GetToolByIdentity is deprecated - use GetRoleToolByIdentity instead
+// Note: This requires roleID now, so callers must be updated
+func (s *TenantStore) GetToolByIdentity(ctx context.Context, name, description, schemaHash string) (*domain.RoleTool, error) {
+	// This function can no longer work without roleID
+	// Return nil to indicate "not found" - callers should use GetRoleToolByIdentity
+	return nil, nil
+}
+
+// UpdateToolSeen is deprecated - use UpdateRoleToolSeen instead
+func (s *TenantStore) UpdateToolSeen(ctx context.Context, id string) error {
+	return s.UpdateRoleToolSeen(ctx, id)
+}
+
+// ListDiscoveredTools is deprecated - use ListRoleTools instead
+func (s *TenantStore) ListDiscoveredTools(ctx context.Context, filter domain.ToolFilter, limit, offset int) ([]*domain.RoleTool, int, error) {
+	// Without roleID, we can't list tools anymore
+	// Return empty to avoid breaking callers, but they should migrate to ListRoleTools
+	return nil, 0, nil
+}
+
+// DeleteDiscoveredTool is deprecated - use DeleteRoleTool instead
+func (s *TenantStore) DeleteDiscoveredTool(ctx context.Context, id string) error {
+	return s.DeleteRoleTool(ctx, id)
+}
+
+// CreateToolPermission is deprecated - permissions are now inline in role_tools
+func (s *TenantStore) CreateToolPermission(ctx context.Context, perm *domain.ToolRolePermission) error {
+	return s.SetRoleToolPermission(ctx, perm.ToolID, perm.Status, perm.DecidedBy, perm.DecidedByEmail, perm.DecisionReason)
+}
+
+// GetToolPermission is deprecated - use GetRoleTool and check .Status
+func (s *TenantStore) GetToolPermission(ctx context.Context, toolID, roleID string) (*domain.ToolRolePermission, error) {
+	tool, err := s.GetRoleTool(ctx, toolID)
+	if err != nil || tool == nil {
+		return nil, err
+	}
+	return &domain.ToolRolePermission{
+		ID:             tool.ID,
+		ToolID:         tool.ID,
+		RoleID:         tool.RoleID,
+		Status:         tool.Status,
+		DecidedBy:      tool.DecidedBy,
+		DecidedByEmail: tool.DecidedByEmail,
+		DecidedAt:      tool.DecidedAt,
+		DecisionReason: tool.DecisionReason,
+		CreatedAt:      tool.CreatedAt,
+		UpdatedAt:      tool.UpdatedAt,
+		Tool:           tool,
+	}, nil
+}
+
+// ListToolPermissions is deprecated - use ListRoleTools instead
+func (s *TenantStore) ListToolPermissions(ctx context.Context, roleID string) ([]*domain.ToolRolePermission, error) {
+	tools, _, err := s.ListRoleTools(ctx, roleID, domain.ToolFilter{}, 1000, 0)
+	if err != nil {
+		return nil, err
+	}
+
+	perms := make([]*domain.ToolRolePermission, len(tools))
+	for i, tool := range tools {
+		perms[i] = &domain.ToolRolePermission{
+			ID:             tool.ID,
+			ToolID:         tool.ID,
+			RoleID:         tool.RoleID,
+			Status:         tool.Status,
+			DecidedBy:      tool.DecidedBy,
+			DecidedByEmail: tool.DecidedByEmail,
+			DecidedAt:      tool.DecidedAt,
+			DecisionReason: tool.DecisionReason,
+			CreatedAt:      tool.CreatedAt,
+			UpdatedAt:      tool.UpdatedAt,
+			Tool:           tool,
+		}
+	}
+	return perms, nil
+}
+
+// ListPendingTools is deprecated - use ListRoleTools with status filter instead
+func (s *TenantStore) ListPendingTools(ctx context.Context) ([]*domain.RoleTool, error) {
+	// List all pending tools across all roles (for backward compat)
+	query := `
+		SELECT id, role_id, name, description, schema_hash, parameters, category,
+			first_seen_at, last_seen_at, first_seen_by, seen_count,
+			status, decided_by, decided_by_email, decided_at, decision_reason,
+			created_at, updated_at
+		FROM role_tools
+		WHERE status = 'PENDING'
+		ORDER BY last_seen_at DESC
+	`
+
+	rows, err := s.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var tools []*domain.RoleTool
+	for rows.Next() {
+		var tool domain.RoleTool
+		var parametersJSON []byte
+		var category, firstSeenBy, decidedBy, decidedByEmail, decisionReason sql.NullString
+		var decidedAt sql.NullTime
+
+		err := rows.Scan(
+			&tool.ID, &tool.RoleID, &tool.Name, &tool.Description, &tool.SchemaHash, &parametersJSON, &category,
+			&tool.FirstSeenAt, &tool.LastSeenAt, &firstSeenBy, &tool.SeenCount,
+			&tool.Status, &decidedBy, &decidedByEmail, &decidedAt, &decisionReason,
+			&tool.CreatedAt, &tool.UpdatedAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		json.Unmarshal(parametersJSON, &tool.Parameters)
+		if category.Valid {
+			tool.Category = category.String
+		}
+		if firstSeenBy.Valid {
+			tool.FirstSeenBy = firstSeenBy.String
+		}
+		if decidedBy.Valid {
+			tool.DecidedBy = decidedBy.String
+		}
+		if decidedByEmail.Valid {
+			tool.DecidedByEmail = decidedByEmail.String
+		}
+		if decidedAt.Valid {
+			tool.DecidedAt = &decidedAt.Time
+		}
+		if decisionReason.Valid {
+			tool.DecisionReason = decisionReason.String
+		}
+
+		tools = append(tools, &tool)
+	}
+
+	return tools, nil
+}
+
+// BulkUpdatePermissions is deprecated - use BulkSetRoleToolPermissions instead
+func (s *TenantStore) BulkUpdatePermissions(ctx context.Context, roleID string, status domain.ToolPermissionStatus, decidedBy, decidedByEmail string) (int, error) {
+	return s.BulkSetRoleToolPermissions(ctx, roleID, status, decidedBy, decidedByEmail)
 }
 
 // Helper function for nullable strings

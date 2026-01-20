@@ -20,7 +20,8 @@ import (
 type ToolDiscoveryService struct {
 	mu sync.RWMutex
 	// Cache of tool hashes to IDs for quick lookup
-	toolCache map[string]string // tenantID:name:description:hash -> toolID
+	// Key: roleID:name:schemaHash -> toolID
+	toolCache map[string]string
 }
 
 // NewToolDiscoveryService creates a new tool discovery service
@@ -109,15 +110,25 @@ func sortJSON(v any) any {
 	}
 }
 
-// DiscoverToolsFromRequest processes tools from a request and stores new ones
-func (s *ToolDiscoveryService) DiscoverToolsFromRequest(
+// RoleToolStore interface for role-scoped tool operations
+type RoleToolStore interface {
+	CreateOrUpdateRoleTool(ctx context.Context, tool *domain.RoleTool) error
+	GetRoleTool(ctx context.Context, id string) (*domain.RoleTool, error)
+	GetRoleToolByIdentity(ctx context.Context, roleID, name, schemaHash string) (*domain.RoleTool, error)
+	UpdateRoleToolSeen(ctx context.Context, id string) error
+	LogToolExecution(ctx context.Context, log *domain.ToolExecutionLog) error
+}
+
+// DiscoverToolsForRole processes tools from a request and stores them for a specific role
+// This is the new role-scoped version - each role has its own set of discovered tools
+func (s *ToolDiscoveryService) DiscoverToolsForRole(
 	ctx context.Context,
-	tenantID string,
+	roleID string,
 	apiKeyID string,
 	tools []domain.Tool,
-	store ToolStore,
-) ([]*domain.DiscoveredTool, error) {
-	discovered := make([]*domain.DiscoveredTool, 0, len(tools))
+	store RoleToolStore,
+) ([]*domain.RoleTool, error) {
+	discovered := make([]*domain.RoleTool, 0, len(tools))
 
 	for _, tool := range tools {
 		if tool.Type != "function" {
@@ -136,46 +147,45 @@ func (s *ToolDiscoveryService) DiscoverToolsFromRequest(
 
 		schemaHash := ComputeSchemaHash(parameters)
 
-		// Check cache first
-		cacheKey := fmt.Sprintf("%s:%s:%s:%s", tenantID, name, description, schemaHash)
+		// Check cache first (role-scoped cache key)
+		cacheKey := fmt.Sprintf("%s:%s:%s", roleID, name, schemaHash)
 		s.mu.RLock()
 		toolID, cached := s.toolCache[cacheKey]
 		s.mu.RUnlock()
 
 		if cached {
 			// Tool exists in cache, verify it still exists in database
-			existing, err := store.GetDiscoveredTool(ctx, toolID)
+			existing, err := store.GetRoleTool(ctx, toolID)
 			if err == nil && existing != nil {
 				// Tool still exists, update last seen
-				if err := store.UpdateToolSeen(ctx, toolID); err != nil {
+				if err := store.UpdateRoleToolSeen(ctx, toolID); err != nil {
 					slog.Warn("Failed to update tool seen", "tool_id", toolID, "error", err)
 				}
 				discovered = append(discovered, existing)
 				continue
 			}
-			// Tool was deleted from database - invalidate cache and continue to recreate
+			// Tool was deleted from database - invalidate cache and recreate
 			slog.Info("Tool in cache but not in database, invalidating cache", "tool_id", toolID, "name", name)
 			s.mu.Lock()
 			delete(s.toolCache, cacheKey)
 			s.mu.Unlock()
-			// Fall through to check database / create new tool
 		}
 
-		// Check database
-		existing, err := store.GetToolByIdentity(ctx, name, description, schemaHash)
+		// Check database for existing tool (by role + name + schema_hash)
+		existing, err := store.GetRoleToolByIdentity(ctx, roleID, name, schemaHash)
 		if err != nil {
-			slog.Warn("Failed to check tool existence", "name", name, "error", err)
+			slog.Warn("Failed to check tool existence", "name", name, "role_id", roleID, "error", err)
 			continue
 		}
 
 		if existing != nil {
 			// Tool exists, update cache and last seen
-			slog.Info("Found existing tool by identity", "name", name, "tool_id", existing.ID, "schema_hash", schemaHash)
+			slog.Debug("Found existing role tool", "name", name, "role_id", roleID, "tool_id", existing.ID)
 			s.mu.Lock()
 			s.toolCache[cacheKey] = existing.ID
 			s.mu.Unlock()
 
-			if err := store.UpdateToolSeen(ctx, existing.ID); err != nil {
+			if err := store.UpdateRoleToolSeen(ctx, existing.ID); err != nil {
 				slog.Warn("Failed to update tool seen", "tool_id", existing.ID, "error", err)
 			}
 
@@ -183,9 +193,10 @@ func (s *ToolDiscoveryService) DiscoverToolsFromRequest(
 			continue
 		}
 
-		// New tool - create it
-		newTool := &domain.DiscoveredTool{
+		// New tool for this role - create it
+		newTool := &domain.RoleTool{
 			ID:          uuid.New().String(),
+			RoleID:      roleID,
 			Name:        name,
 			Description: description,
 			SchemaHash:  schemaHash,
@@ -193,31 +204,20 @@ func (s *ToolDiscoveryService) DiscoverToolsFromRequest(
 			FirstSeenBy: apiKeyID,
 			SeenCount:   1,
 			Category:    inferCategory(name, description),
+			Status:      domain.ToolStatusPending, // New tools start as pending
 		}
 
-		if err := store.CreateDiscoveredTool(ctx, newTool); err != nil {
-			// Might be a race condition - try to fetch again
-			if strings.Contains(err.Error(), "duplicate") || strings.Contains(err.Error(), "unique") {
-				existing, _ := store.GetToolByIdentity(ctx, name, description, schemaHash)
-				if existing != nil {
-					discovered = append(discovered, existing)
-					s.mu.Lock()
-					s.toolCache[cacheKey] = existing.ID
-					s.mu.Unlock()
-					continue
-				}
-			}
-			slog.Warn("Failed to create tool", "name", name, "error", err)
+		if err := store.CreateOrUpdateRoleTool(ctx, newTool); err != nil {
+			slog.Warn("Failed to create/update role tool", "name", name, "role_id", roleID, "error", err)
 			continue
 		}
 
-		slog.Info("Discovered new tool",
+		slog.Info("Discovered new tool for role",
 			"tool_id", newTool.ID,
 			"name", name,
-			"description", description,
-			"tenant_id", tenantID)
+			"role_id", roleID)
 
-		// Update cache
+		// Update cache with actual ID (might be different if upsert returned existing)
 		s.mu.Lock()
 		s.toolCache[cacheKey] = newTool.ID
 		s.mu.Unlock()
@@ -268,13 +268,13 @@ func inferCategory(name, description string) string {
 }
 
 // CheckToolPermissions checks if all tools are allowed for a role
-// Returns nil if all tools are allowed, otherwise returns an error with details
+// Now simplified since permissions are inline in the RoleTool
 func (s *ToolDiscoveryService) CheckToolPermissions(
 	ctx context.Context,
 	roleID string,
-	tools []*domain.DiscoveredTool,
+	tools []*domain.RoleTool,
 	policy domain.EnhancedToolPolicies,
-	store ToolStore,
+	store RoleToolStore,
 ) (*ToolPolicyResult, error) {
 	result := &ToolPolicyResult{
 		Allowed: true,
@@ -287,74 +287,51 @@ func (s *ToolDiscoveryService) CheckToolPermissions(
 			ToolName: tool.Name,
 		}
 
-		// Get permission for this tool-role combination
-		perm, err := store.GetToolPermission(ctx, tool.ID, roleID)
-		if err != nil {
-			checkResult.Status = "ERROR"
-			checkResult.Reason = fmt.Sprintf("failed to check permission: %v", err)
-			result.Tools = append(result.Tools, checkResult)
-			result.Allowed = false
-			continue
-		}
+		// Permission is now inline in the tool
+		switch tool.Status {
+		case domain.ToolStatusAllowed:
+			checkResult.Status = "ALLOWED"
+			checkResult.Reason = "explicitly allowed"
 
-		if perm == nil {
-			// No explicit permission - use default action
-			slog.Info("No permission found for tool", "tool_id", tool.ID, "tool_name", tool.Name, "role_id", roleID, "default_action", policy.DefaultAction)
+		case domain.ToolStatusDenied:
+			checkResult.Status = "BLOCKED"
+			if tool.DecisionReason != "" {
+				checkResult.Reason = tool.DecisionReason
+			} else {
+				checkResult.Reason = "explicitly denied"
+			}
+			result.Allowed = false
+
+		case domain.ToolStatusRemoved:
+			checkResult.Status = "REMOVED"
+			if tool.DecisionReason != "" {
+				checkResult.Reason = tool.DecisionReason
+			} else {
+				checkResult.Reason = "tool removed from request"
+			}
+			// REMOVED does NOT set result.Allowed = false - request continues without this tool
+
+		case domain.ToolStatusPending:
+			// Use default action for pending tools
 			if policy.DefaultAction == "ALLOW" {
 				checkResult.Status = "ALLOWED"
-				checkResult.Reason = "default policy: allow unknown tools"
+				checkResult.Reason = "pending review (default allow)"
 			} else {
 				checkResult.Status = "BLOCKED"
 				checkResult.Reason = "pending review (default deny)"
 				result.Allowed = false
 			}
-		} else {
-			slog.Info("Permission found for tool", "tool_id", tool.ID, "tool_name", tool.Name, "role_id", roleID, "perm_status", perm.Status, "perm_tool_id", perm.ToolID)
-			switch perm.Status {
-			case domain.ToolStatusAllowed:
+
+		default:
+			// Unknown status - use default action
+			slog.Warn("Unknown tool permission status", "tool_id", tool.ID, "tool_name", tool.Name, "status", tool.Status)
+			if policy.DefaultAction == "ALLOW" {
 				checkResult.Status = "ALLOWED"
-				checkResult.Reason = "explicitly allowed"
-
-			case domain.ToolStatusDenied:
+				checkResult.Reason = "unknown status, default allow"
+			} else {
 				checkResult.Status = "BLOCKED"
-				if perm.DecisionReason != "" {
-					checkResult.Reason = perm.DecisionReason
-				} else {
-					checkResult.Reason = "explicitly denied"
-				}
+				checkResult.Reason = "unknown status, default deny"
 				result.Allowed = false
-
-			case domain.ToolStatusRemoved:
-				checkResult.Status = "REMOVED"
-				if perm.DecisionReason != "" {
-					checkResult.Reason = perm.DecisionReason
-				} else {
-					checkResult.Reason = "tool removed from request"
-				}
-				// Note: REMOVED does NOT set result.Allowed = false
-				// The request continues without this tool
-
-			case domain.ToolStatusPending:
-				if policy.DefaultAction == "ALLOW" {
-					checkResult.Status = "ALLOWED"
-					checkResult.Reason = "pending review (default allow)"
-				} else {
-					checkResult.Status = "BLOCKED"
-					checkResult.Reason = "pending review (default deny)"
-					result.Allowed = false
-				}
-
-			default:
-				// Unknown status - log and treat as pending
-				slog.Warn("Unknown tool permission status", "tool_id", tool.ID, "tool_name", tool.Name, "status", perm.Status)
-				if policy.DefaultAction == "ALLOW" {
-					checkResult.Status = "ALLOWED"
-					checkResult.Reason = "unknown status, default allow"
-				} else {
-					checkResult.Status = "BLOCKED"
-					checkResult.Reason = "unknown status, default deny"
-					result.Allowed = false
-				}
 			}
 		}
 
@@ -411,12 +388,32 @@ func (r *ToolPolicyResult) AllowedTools() []ToolCheckResult {
 	return allowed
 }
 
-// ToolStore interface for tool repository operations
+// ============================================================================
+// Deprecated: Legacy compatibility - will be removed
+// ============================================================================
+
+// ToolStore is deprecated - use RoleToolStore instead
 type ToolStore interface {
-	CreateDiscoveredTool(ctx context.Context, tool *domain.DiscoveredTool) error
-	GetDiscoveredTool(ctx context.Context, id string) (*domain.DiscoveredTool, error)
-	GetToolByIdentity(ctx context.Context, name, description, schemaHash string) (*domain.DiscoveredTool, error)
+	RoleToolStore
+	// Legacy methods for backward compatibility
+	CreateDiscoveredTool(ctx context.Context, tool *domain.RoleTool) error
+	GetDiscoveredTool(ctx context.Context, id string) (*domain.RoleTool, error)
+	GetToolByIdentity(ctx context.Context, name, description, schemaHash string) (*domain.RoleTool, error)
 	UpdateToolSeen(ctx context.Context, id string) error
 	GetToolPermission(ctx context.Context, toolID, roleID string) (*domain.ToolRolePermission, error)
-	LogToolExecution(ctx context.Context, log *domain.ToolExecutionLog) error
+}
+
+// DiscoverToolsFromRequest is deprecated - use DiscoverToolsForRole instead
+// This is kept for backward compatibility but now requires roleID through the apiKeyID lookup
+func (s *ToolDiscoveryService) DiscoverToolsFromRequest(
+	ctx context.Context,
+	tenantID string,
+	apiKeyID string,
+	tools []domain.Tool,
+	store ToolStore,
+) ([]*domain.RoleTool, error) {
+	// This function is deprecated - callers should use DiscoverToolsForRole
+	// For now, return empty to avoid breaking changes
+	slog.Warn("DiscoverToolsFromRequest is deprecated, use DiscoverToolsForRole with roleID")
+	return nil, nil
 }
