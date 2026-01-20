@@ -643,20 +643,6 @@ Apache License 2.0 — see [LICENSE](LICENSE) for details.
 
 ---
 
-## Enterprise Edition
-
-Need multi-tenancy, intelligent routing, or advanced resilience features?
-
-Contact us at **info@mazori.ai** for the Enterprise Edition:
-
-- Multi-tenant isolation with separate databases
-- Intelligent request routing (cost/latency optimized)
-- Resilience patterns (retries, circuit breakers, fallbacks)
-- Advanced budget controls with department-level limits
-- Priority support and SLAs
-
----
-
 <p align="center">
-  <sub>Built with ❤️ by the ModelGate community</sub>
+  <sub>Built with ❤️ by the ModelGate community  info@mazori.ai </sub>
 </p>
